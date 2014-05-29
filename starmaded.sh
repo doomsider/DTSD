@@ -5,7 +5,7 @@
 #  Jstack for a dump has been added into the ebrake command to be used with the detect command to see if server is responsive.
 #  These dumps will be in starterpath/logs/threaddump.log and can be submitted to Schema to troubleshoot server crashes
 #  !!!You must update starmade.cfg for the Daemon to work on your setup!!!
-
+#test
 # This sets the path of the script to the actual script directory.  This is some magic I found on stackoverflow http://stackoverflow.com/questions/4774054/reliable-way-for-a-bash-script-to-get-the-full-path-to-itself	
 DAEMONPATH=$(cd `dirname "${BASH_SOURCE[0]}"` && pwd)/`basename "${BASH_SOURCE[0]}"`
 CONFIGPATH="$(echo $DAEMONPATH | cut -d"." -f1).cfg"
