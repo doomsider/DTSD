@@ -1151,7 +1151,7 @@ then
 #          	echo "ship found"
 # Placeholder       
 # Grab the old board as a variable             
-			OLDBOARDER=$(grep {$SHIPBOARDED} $SHIPLOG | cut -d\[ -f2 | cut -d\] -f1) 
+			OLDBOARDER=$(grep "{$SHIPBOARDED}" $SHIPLOG | cut -d\[ -f2 | cut -d\] -f1) 
 #			echo "The oldboarder is $OLDBOARDER"
 			as_user "sed -i 's/{$SHIPBOARDED} \[$OLDBOARDER\]/{$SHIPBOARDED} \[$PLAYEREXITING\]/g' $SHIPLOG"   
 			# If the ship log exists but no record of the ship write it to a new line on the log
@@ -1199,22 +1199,23 @@ then
 	if [ ! -f $STATIONLOG ] 
 	then
 #		echo "no file"   
-		as_user "echo $STBOARDED \[$PLAYEREXITING\] \($STATIONBRDSC\) >> $STATIONLOG" 
+		as_user "echo {$STBOARDED} \[$PLAYEREXITING\] \($STATIONBRDSC\) >> $STATIONLOG" 
 	fi
 # If the station log does exist 
 	if  [ -e $STATIONLOG ]
 	then 
 # Check to see if station is already in station log      
-		if grep "$STBOARDED" $STATIONLOG >/dev/null
+		if grep "{$STBOARDED}" $STATIONLOG >/dev/null
 		then
 # Placeholder
 			STATIONFOUND=1
 #			echo "station already found"
 # If the station log exists but no record of the ship write it to a new line on the log
+			as_user "sed -i 's/{$STBOARDED} .*/{$STBOARDED} \[$PLAYEREXITING\]/g' $STATIONLOG"   
 		else 
 #			echo "file found but no station name, writing"
 # Write the new ship, boarder, and current sector to ship log
-			as_user "echo $STBOARDED \[$PLAYEREXITING\] \($STATIONBRDSC\) >> $STATIONLOG"  
+			as_user "echo {$STBOARDED} \[$PLAYEREXITING\] \($STATIONBRDSC\) >> $STATIONLOG"  
 		fi
 	fi
 fi
@@ -1242,15 +1243,15 @@ then
 	if [ ! -f $PLANETLOG ] 
 	then
 #		echo "no file"   
-		as_user "echo $PLANETBOARDED \[$PLAYEREXITING\] \($PLANETCOORDS\) >> $PLANETLOG" 
+		as_user "echo {$PLANETBOARDED} \[$PLAYEREXITING\] \($PLANETCOORDS\) >> $PLANETLOG" 
 	fi
 	if [ -e $PLANETLOG ]
 	then
-		if grep "$$PLANETBOARDED" $PLANETLOG >/dev/null
+		if grep "{$PLANETBOARDED}" $PLANETLOG >/dev/null
 		then
-			as_user "sed -i 's/$PLANETBOARDED \[.*\] \(.*\)/$PLANETBOARDED \[$PLAYEREXITING\] \($PLANETCOORDS\)/g' $PLANETLOG"
+			as_user "sed -i 's/{$PLANETBOARDED} \[.*\] \(.*\)/{$PLANETBOARDED} \[$PLAYEREXITING\] \($PLANETCOORDS\)/g' $PLANETLOG"
 		else
-			as_user "echo $PLANETBOARDED \[$PLAYEREXITING\] \($PLANETCOORDS\) >> $PLANETLOG"
+			as_user "echo {$PLANETBOARDED} \[$PLAYEREXITING\] \($PLANETCOORDS\) >> $PLANETLOG"
 		fi
 	fi
 fi
