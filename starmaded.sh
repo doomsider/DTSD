@@ -1,4 +1,5 @@
 #!/bin/bash
+<<<<<<< HEAD
 # Doomsider's and Titanmasher's Daemon Script for Starmade.  init.d script 7/10/13 based off of http://paste.boredomsoft.org/main.php/view/62107887
 # All credits to Andrew for his initial work
 # Version .17 6/8/2014
@@ -10,6 +11,15 @@
 #For development purposes update check can be turned off
 UPDATECHECK=NO
 # Set the basics paths for the Daemon automatically.  This can be changed if needed for alternate configurations
+=======
+#  Doomsider's and Titanmasher's Daemon Script for Starmade.  init.d script 7/10/13 based off of http://paste.boredomsoft.org/main.php/view/62107887
+#  All credits to Andrew for his initial work
+#  Version .16 5/27/2014
+#  Jstack for a dump has been added into the ebrake command to be used with the detect command to see if server is responsive.
+#  These dumps will be in starterpath/logs/threaddump.log and can be submitted to Schema to troubleshoot server crashes
+#  !!!You must update starmade.cfg for the Daemon to work on your setup!!!
+
+>>>>>>> cc6178df742a5ae8e41448c6bda4dc6e084cc261
 # This sets the path of the script to the actual script directory.  This is some magic I found on stackoverflow http://stackoverflow.com/questions/4774054/reliable-way-for-a-bash-script-to-get-the-full-path-to-itself	
 DAEMONPATH=$(cd `dirname "${BASH_SOURCE[0]}"` && pwd)/`basename "${BASH_SOURCE[0]}"`
 CONFIGPATH="$(echo $DAEMONPATH | cut -d"." -f1).cfg"
@@ -1114,7 +1124,11 @@ then
 	if [ ! -f $STATIONLOG ] 
 	then
 #		echo "no file"   
+<<<<<<< HEAD
 		as_user "echo \{$STBOARDED\} \[$PLAYEREXITING\] \($STATIONBRDSC\) >> $STATIONLOG" 
+=======
+		as_user "echo {$STBOARDED} \[$PLAYEREXITING\] \($STATIONBRDSC\) >> $STATIONLOG" 
+>>>>>>> cc6178df742a5ae8e41448c6bda4dc6e084cc261
 	fi
 # If the station log does exist 
 	if  [ -e $STATIONLOG ]
@@ -1127,10 +1141,15 @@ then
 #			echo "station already found"
 			as_user "sed -i 's/{$STBOARDED\} .*/$STBOARDED \[$PLAYEREXITING\] \($STATIONBRDSC\)/g' $STATIONLOG"
 # If the station log exists but no record of the ship write it to a new line on the log
+			as_user "sed -i 's/{$STBOARDED} .*/{$STBOARDED} \[$PLAYEREXITING\]/g' $STATIONLOG"   
 		else 
 #			echo "file found but no station name, writing"
 # Write the new ship, boarder, and current sector to ship log
+<<<<<<< HEAD
 			as_user "echo \{$STBOARDED\} \[$PLAYEREXITING\] \($STATIONBRDSC\) >> $STATIONLOG"  
+=======
+			as_user "echo {$STBOARDED} \[$PLAYEREXITING\] \($STATIONBRDSC\) >> $STATIONLOG"  
+>>>>>>> cc6178df742a5ae8e41448c6bda4dc6e084cc261
 		fi
 	fi
 fi
@@ -1158,15 +1177,25 @@ then
 	if [ ! -f $PLANETLOG ] 
 	then
 #		echo "no file"   
+<<<<<<< HEAD
 		as_user "echo \{$PLANETBOARDED\} \[$PLAYEREXITING\] \($PLANETCOORDS\) >> $PLANETLOG" 
+=======
+		as_user "echo {$PLANETBOARDED} \[$PLAYEREXITING\] \($PLANETCOORDS\) >> $PLANETLOG" 
+>>>>>>> cc6178df742a5ae8e41448c6bda4dc6e084cc261
 	fi
 	if [ -e $PLANETLOG ]
 	then
 		if grep "{$PLANETBOARDED}" $PLANETLOG >/dev/null
 		then
+<<<<<<< HEAD
 			as_user "sed -i 's/{$PLANETBOARDED\} \[.*\] \(.*\)/$PLANETBOARDED \[$PLAYEREXITING\] \($PLANETCOORDS\)/g' $PLANETLOG"
 		else
 			as_user "echo \{$PLANETBOARDED\} \[$PLAYEREXITING\] \($PLANETCOORDS\) >> $PLANETLOG"
+=======
+			as_user "sed -i 's/{$PLANETBOARDED} \[.*\] \(.*\)/{$PLANETBOARDED} \[$PLAYEREXITING\] \($PLANETCOORDS\)/g' $PLANETLOG"
+		else
+			as_user "echo {$PLANETBOARDED} \[$PLAYEREXITING\] \($PLANETCOORDS\) >> $PLANETLOG"
+>>>>>>> cc6178df742a5ae8e41448c6bda4dc6e084cc261
 		fi
 	fi
 fi

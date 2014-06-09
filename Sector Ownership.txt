@@ -1,0 +1,14 @@
+14day cycle (final gamemode)
+passive income per sector -Done
+sectors cost to buy -Done
+sector claim beacons -Done
+lone sectors cost more than clusters -Done
+lone sectors produce less than clusters -Done
+lone sector = daily loss -Done
+pairs of sectors = break even -Done
+more than pairs = daily profit -Done
+players passing through recieve warning message and then pay tax for entering the system -Rejected(?)
+if faction bank account runs out of money, beacon is removed -Done
+income gets stored in the sector/beacon, not faction account -Done
+limit to amount of money inside each beacon -Done
+sector is protected from mob spawns (needs checking if it is bugged) -Done
