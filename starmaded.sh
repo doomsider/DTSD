@@ -653,6 +653,8 @@ create_rankscommands
 		SEARCHCHANGE="has players attached. Doing Sector Change for PlS"
 		SEARCHBUY="[BLUEPRINT][BUY]"
 		SEARCHBOARD="[CONTROLLER][ADD-UNIT]"
+		SEARCHDOCK="NOW REQUESTING DOCK FROM"
+		SEARCHUNDOCK="NOW UNDOCKING:"
 		SEARCHADMIN="[ADMIN COMMAND]"
 		SEARCHKILL="Announcing kill:"
 		SEARCHDESTROY="PERMANENTLY DELETING ENTITY:"
@@ -696,6 +698,16 @@ create_rankscommands
 #				echo "Board detected"
 #				echo $CURRENTSTRING
 				log_boarding $CURRENTSTRING &
+				;;
+			*"$SEARCHDOCK"*) 
+#				echo "Docking detected"
+#				echo $CURRENTSTRING
+				log_docking docking $CURRENTSTRING &
+				;;
+			*"$SEARCHUNDOCK"*) 
+#				echo "Undocking detected"
+#				echo $CURRENTSTRING
+				log_docking undocking $CURRENTSTRING &
 				;;
 			*"$SEARCHADMIN"*) 
 #				echo "Admin detected"
@@ -1055,7 +1067,7 @@ then
 	if [ ! -f $SHIPLOG ] 
 	then
 #		echo "no file"   
-		as_user "echo \{$SHIPBOARDED\} \[$PLAYEREXITING\] \($SHIPBRDSC\) >> $SHIPLOG" 
+		as_user "echo \{$SHIPBOARDED\} \[$PLAYEREXITING\] \<~none\> \($SHIPBRDSC\) >> $SHIPLOG" 
 	fi
 # If the ship log does exist 
 	if  [ -e $SHIPLOG ]
@@ -1073,7 +1085,7 @@ then
 		else 
 #			echo "file found but no ship name, writing"
 # Write the new ship, boarder, and current sector to ship log
-			as_user "echo \{$SHIPBOARDED\} \[$PLAYEREXITING\] \($SHIPBRDSC\) >> $SHIPLOG"  
+			as_user "echo \{$SHIPBOARDED\} \[$PLAYEREXITING\] \<~none\> \($SHIPBRDSC\) >> $SHIPLOG"  
 # Write the new ship to the player log
 		fi
 	fi
@@ -1224,9 +1236,9 @@ then
 		as_user "sed -i 's/PlayerLocation=$OLDSHIPSC/PlayerLocation=$PLAYERSCSHIPCHANGE/g' $PLAYERFILE/$PLAYERSCSHIP"
 		if (grep "{$SHIPSC}" $SHIPLOG >/dev/null)
 		then
-			as_user "sed -i 's/{$SHIPSC} .*/{$SHIPSC} \[$PLAYERSCSHIP\] \($PLAYERSCSHIPCHANGE\)/g' $SHIPLOG"
+			as_user "sed -i 's/{$SHIPSC} .*/{$SHIPSC} \[$PLAYERSCSHIP\] \<~none\> \($PLAYERSCSHIPCHANGE\)/g' $SHIPLOG"
 		else
-			as_user "echo {$SHIPSC} \[$PLAYERSCSHIP\] \($PLAYERSCSHIPCHANGE\) >> $SHIPLOG" 
+			as_user "echo {$SHIPSC} \[$PLAYERSCSHIP\] \<~none\> \($PLAYERSCSHIPCHANGE\) >> $SHIPLOG" 
 		fi
 		universeboarder $PLAYERSCSHIPCHANGE $PLAYERSCSHIP
 		customspawns $PLAYERSCSHIPCHANGE $PLAYERSCSHIP &
@@ -1408,6 +1420,37 @@ then
 	# A chat message that is displayed whenever a player logs in
 	as_user "screen -p 0 -S $SCREENID -X stuff $'/pm $INITPLAYER $LOGINMESSAGE\n'"
 	as_user "sed -i 's/JustLoggedIn=.*/JustLoggedIn=No/g' $PLAYERFILE/$INITPLAYER"
+fi
+}
+log_docking(){
+if [ $1 = "docking" ]
+then
+	DOCKSTRING=${@:2}
+	DOCKSHIP=$(echo $DOCKSTRING | cut -d"[" -f3 | cut -d"]" -f1)
+#	echo $DOCKSHIP
+	DOCKSTATION=$(echo $DOCKSTRING | cut -d"[" -f4 | cut -d"]" -f1 | cut -d"_" -f3- | cut -d"(" -f1)
+#	echo $DOCKSTATION
+	if (grep "{$DOCKSHIP}" $SHIPLOG >/dev/null)
+	then
+		SHIPDATA=($(grep "{$DOCKSHIP}" $SHIPLOG))
+		SHIPDATA[2]="<$DOCKSTATION>"
+		as_user "sed -i 's/{$DOCKSHIP} .*/$(echo ${SHIPDATA[@]})/g' $SHIPLOG"
+	else
+		as_user "echo {$DOCKSHIP} \[~Unknown\] \<$DOCKSTATION\> \(~Unknown\) >> $SHIPLOG" 
+	fi
+elif [ $1 = "undocking" ]
+then
+	DOCKSTRING=${@:2}
+	DOCKSHIP=$(echo $DOCKSTRING | cut -d"[" -f3 | cut -d"]" -f1)
+#	echo $DOCKSHIP
+	if (grep "{$DOCKSHIP}" $SHIPLOG >/dev/null)
+	then
+		SHIPDATA=($(grep "{$DOCKSHIP}" $SHIPLOG))
+		SHIPDATA[2]="<~none>"
+		as_user "sed -i 's/{$DOCKSHIP} .*/$(echo ${SHIPDATA[@]})/g' $SHIPLOG"
+	else
+		as_user "echo {$DOCKSHIP} \[~Unknown\] \<~none\> \(~Unknown\) >> $SHIPLOG"
+	fi
 fi
 }
 
@@ -2965,12 +3008,12 @@ function COMMAND_ADDJUMP(){
 		if ! grep -q $2 $GATELOG
 		then
 #			Gets players location and faction
-			SECTOR[$1]=$(grep "PlayerLocation=" $PLAYERFILE/$1 | cut -d= -f2)
-			CONTROLLINGOBJECT[$1]=$(grep "PlayerControllingObject=" $PLAYERFILE/$1 | cut -d= -f2)
-			CONTROLLINGTYPE[$1]=$(grep "PlayerControllingType=" $PLAYERFILE/$1 | cut -d= -f2)
+			SECTOR=$(grep "PlayerLocation=" $PLAYERFILE/$1 | cut -d= -f2)
+			CONTROLLINGOBJECT=$(grep "PlayerControllingObject=" $PLAYERFILE/$1 | cut -d= -f2)
+			CONTROLLINGTYPE=$(grep "PlayerControllingType=" $PLAYERFILE/$1 | cut -d= -f2)
 			if [[ "$CONTROLLINGTYPE" == "Spacestation" ]]
 			then
-				if ! grep -q ${SECTOR[$1]} $GATELOG
+				if ! grep -q ${SECTOR} $GATELOG
 				then
 #					Checks if player can afford the gate
 					VOTINGPOINTS=$(grep "VotingPoints=" $PLAYERFILE/$1 | cut -d= -f2)
@@ -2980,10 +3023,10 @@ function COMMAND_ADDJUMP(){
 						let "VOTESSAVED=$VOTINGPOINTS-$GATECOST"
 						as_user "sed -i 's/VotingPoints=$VOTINGPOINTS/VotingPoints=$VOTESSAVED/g' $PLAYERFILE/$1"
 #						Add the gate to the gates.log file
-						echo "Name: $2 Sector: ${SECTOR[$1]} Level: 1 Creator: $1 TotalCost: $GATECOST LinkedEntity: ${CONTROLLINGOBJECT[$1]}" >> $GATELOG
-						as_user "screen -p 0 -S $SCREENID -X stuff $'/pm $1 If someone destroys the station ${CONTROLLINGOBJECT[$1]} the the gate will be destroyed and you will not be refunded\n'"
+						echo "Name: $2 Sector: ${SECTOR[$1]} Level: 1 Creator: $1 TotalCost: $GATECOST LinkedEntity: ${CONTROLLINGOBJECT}" >> $GATELOG
+						as_user "screen -p 0 -S $SCREENID -X stuff $'/pm $1 If someone destroys the station ${CONTROLLINGOBJECT} the the gate will be destroyed and you will not be refunded\n'"
 						as_user "screen -p 0 -S $SCREENID -X stuff $'/pm $1 You can upgrade the Gate by typing !UPGRADEJUMP <Name of gate>!\n'"
-						as_user "screen -p 0 -S $SCREENID -X stuff $'/pm $1 It is in sector ${SECTOR[$1]} and belongs to $1!\n'"
+						as_user "screen -p 0 -S $SCREENID -X stuff $'/pm $1 It is in sector ${SECTOR} and belongs to $1!\n'"
 						as_user "screen -p 0 -S $SCREENID -X stuff $'/pm $1 You have sucessfully spawned a gate called $2!\n'"
 					else
 						as_user "screen -p 0 -S $SCREENID -X stuff $'/pm $1 You dont have enough voting points to spawn a gate! You need $GATECOST but only have $VOTINGPOINTS\n'"
@@ -3027,12 +3070,12 @@ function COMMAND_JUMP(){
 	else
 		if [[ $(grep "JumpDisabled=" $PLAYERFILE/$1 | cut -d= -f2) -le $(date +%s) ]]
 		then
-			SECTOR[$1]=$(grep "PlayerLocation=" $PLAYERFILE/$1 | cut -d= -f2)
-			CONTROLLINGTYPE[$1]=$(grep "PlayerControllingType=" $PLAYERFILE/$1 | cut -d= -f2)
-			if [[ "${CONTROLLINGTYPE[$1]}" == "Ship" ]]
+			SECTOR=$(grep "PlayerLocation=" $PLAYERFILE/$1 | cut -d= -f2)
+			CONTROLLINGTYPE=$(grep "PlayerControllingType=" $PLAYERFILE/$1 | cut -d= -f2)
+			if [[ "$CONTROLLINGTYPE" == "Ship" ]]
 			then
 #				Check if the player is in a jump gate sector (-- tells grep its the end of parameters due to negative sectors confusing it)
-				if grep -q -- "${SECTOR[$1]}" $GATELOG
+				if grep -q -- "$SECTOR" $GATELOG
 				then
 					GATEINFO=($(grep -- "Sector: ${SECTOR[$1]}" $GATELOG))
 					if [ ! -e $GATEWHITELIST/${GATEINFO[7]} ]
@@ -3059,10 +3102,10 @@ function COMMAND_JUMP(){
 								let WARMUP--
 							done
 #							Gets the players sector again, to make sure theyre in the same sector still
-							SECTORA=${SECTOR[$1]}
-							SECTOR[$1]=$(grep "PlayerLocation=" $PLAYERFILE/$1 | cut -d= -f2)
-							CONTROLLINGTYPE[$1]=$(grep "PlayerControllingType=" $PLAYERFILE/$1 | cut -d= -f2)
-							if [[ "$SECTORA" == "${SECTOR[$1]}" ]] && [[ "${CONTROLLINGTYPE[$1]}" == "Ship" ]]
+							SECTORA=$SECTOR
+							SECTOR=$(grep "PlayerLocation=" $PLAYERFILE/$1 | cut -d= -f2)
+							CONTROLLINGTYPE=$(grep "PlayerControllingType=" $PLAYERFILE/$1 | cut -d= -f2)
+							if [[ "$SECTORA" == "$SECTOR" ]] && [[ "$CONTROLLINGTYPE" == "Ship" ]]
 							then
 #								teleports the user to the destination gate
 								as_user "screen -p 0 -S $SCREENID -X stuff $'/change_sector_for $1 $(grep " $2 " $GATELOG | cut -d":" -f3 | cut -d" " -f2 | tr "," " ")\n'"
@@ -3098,7 +3141,6 @@ function COMMAND_UPGRADEJUMP(){ #Look at let statements with cutting of " " for 
 #		Checks if the gate exists		
 		if grep -q -- $2 $GATELOG
 		then
-			SECTOR[$1]=$(grep "PlayerLocation=" $PLAYERFILE/$1 | cut -d= -f2)
 			GATEINFO=($(grep -- " $2 " $GATELOG))
 #			Checks if the player has faction permission to upgrade the gate, or if the gate is faction All, check if theyre the creator of it	
 			if [[ "${GATEINFO[7]}" == "$1" ]]
@@ -3144,7 +3186,6 @@ function COMMAND_DESTROYJUMP(){
 #		Checks if the gate exists
 		if grep -q -- $2 $GATELOG
 		then
-			SECTOR[$1]=$(grep "PlayerLocation=" $PLAYERFILE/$1 | cut -d= -f2)
 			GATEINFO=($(grep -- " $2 " $GATELOG))
 #			Checks if the player owns the gate
 			if [[ "${GATEINFO[7]}" == "$1" ]]
