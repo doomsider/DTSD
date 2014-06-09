@@ -1428,15 +1428,20 @@ then
 	DOCKSTRING=${@:2}
 	DOCKSHIP=$(echo $DOCKSTRING | cut -d"[" -f3 | cut -d"]" -f1)
 #	echo $DOCKSHIP
-	DOCKSTATION=$(echo $DOCKSTRING | cut -d"[" -f4 | cut -d"]" -f1 | cut -d"_" -f3- | cut -d"(" -f1)
-#	echo $DOCKSTATION
+	if $(echo $DOCKSTRING | grep -q -- "ON Ship\[")
+	then
+		DOCKENTITY=$(echo $DOCKSTRING | cut -d"[" -f4 | cut -d"]" -f1)"@ship"
+	else
+		DOCKENTITY=$(echo $DOCKSTRING | cut -d"[" -f4 | cut -d"]" -f1 | cut -d"_" -f3- | cut -d"(" -f1)"@station"
+	fi
+#	echo $DOCKENTITY
 	if (grep "{$DOCKSHIP}" $SHIPLOG >/dev/null)
 	then
 		SHIPDATA=($(grep "{$DOCKSHIP}" $SHIPLOG))
-		SHIPDATA[2]="<$DOCKSTATION>"
+		SHIPDATA[2]="<$DOCKENTITY>"
 		as_user "sed -i 's/{$DOCKSHIP} .*/$(echo ${SHIPDATA[@]})/g' $SHIPLOG"
 	else
-		as_user "echo {$DOCKSHIP} \[~Unknown\] \<$DOCKSTATION\> \(~Unknown\) >> $SHIPLOG" 
+		as_user "echo {$DOCKSHIP} \[~Unknown\] \<$DOCKENTITY\> \(~Unknown\) >> $SHIPLOG" 
 	fi
 elif [ $1 = "undocking" ]
 then
