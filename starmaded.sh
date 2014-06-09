@@ -2060,36 +2060,36 @@ fi
 }
 update_file() {
 #echo "Starting Update"
-#echo "$2 is the write function to update the old config filename"
-#echo "$3 is the name of the specific file for functions like playerfile or factionfile"
+echo "$1 is the write function to update the old config filename"
+echo "$2 is the name of the specific file for functions like playerfile or factionfile"
 # Grab first occurrence of value from the Daemon file itself to be used to determine correct path
-DLINE=$(grep -n -m 1 $2 $DAEMONPATH | cut -d : -f 1)
-#echo "This is the starting line for the write function $DLINE"
+DLINE=$(grep -n -m 1 $1 $DAEMONPATH | cut -d : -f 1)
+echo "This is the starting line for the write function $DLINE"
 let DLINE++
 EXTRACT=$(sed -n "${DLINE}p" $DAEMONPATH)
-#echo "Here is the second line of write funtion $EXTRACT"
-if [ "$#" -eq "3" ]
+echo "Here is the second line of write funtion $EXTRACT"
+if [ "$#" -eq "2" ]
 then
 	PATHUPDATEFILE=$(echo $EXTRACT | cut -d$ -f2- | cut -d/  -f1)
-#	echo "Extraction from Daemon $PATHUPDATEFILE"
-	PATHUPDATEFILE=${!PATHUPDATEFILE}/$3
-#	echo "modified directory $PATHUPDATEFILE"
+	echo "Extraction from Daemon $PATHUPDATEFILE"
+	PATHUPDATEFILE=${!PATHUPDATEFILE}/$2
+	echo "modified directory $PATHUPDATEFILE"
 else
 	PATHUPDATEFILE=$(echo $EXTRACT | cut -d$ -f2- | cut -d" " -f1)
-#	echo "This is what was extracted from the Daemon $PATHUPDATEFILE"
+	echo "This is what was extracted from the Daemon $PATHUPDATEFILE"
 # Set the path to what the source of the config file value is
 	PATHUPDATEFILE=${!PATHUPDATEFILE}
 	cp $PATHUPDATEFILE $PATHUPDATEFILE.old
 fi
-#echo "This is the actual path to the file to be updated $PATHUPDATEFILE"
+echo "This is the actual path to the file to be updated $PATHUPDATEFILE"
 #This is how you would compare files for future work ARRAY=( $(grep -n -Fxvf test1 test2) )
 OLD_IFS=$IFS
 IFS=$'\n'
 # Create an array of the old file
 OLDFILESTRING=( $(cat $PATHUPDATEFILE) )
 as_user "rm $PATHUPDATEFILE"
-# $2 is the write file function for the file being updated and if $3 is set it will use specific file
-$2 $3
+# $1 is the write file function for the file being updated and if $3 is set it will use specific file
+$1 $2
 # Put the newly written file into an array
 NEWFILESTRING=( $(cat $PATHUPDATEFILE) )
 IFS=$OLD_IFS
