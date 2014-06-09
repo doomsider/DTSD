@@ -2938,37 +2938,38 @@ function COMMAND_FOLD(){
 	then
 		as_user "screen -p 0 -S $SCREENID -X stuff $'/pm $1 Invalid parameters. Please use !FOLD <X> <Y> <Z>\n'"
 	else
-		CONTROLLINGTYPE[$1]=$(grep "PlayerControllingType=" $PLAYERFILE/$1 | cut -d= -f2)
-		if [[ "${CONTROLLINGTYPE[$1]}" == "Ship" ]]
+		CONTROLLINGTYPE=$(grep "PlayerControllingType=" $PLAYERFILE/$1 | cut -d= -f2)
+		CONTROLLINGOBJECT=$(grep "PlayerControllingObject=" $PLAYERFILE/$1 | cut -d= -f2)
+		if [[ "${CONTROLLINGTYPE}" == "Ship" ]] && [[ "$(grep -- $CONTROLLINGOBJECT $SHIPLOG | cut -d"<" -f2 | cut -d">" -f1)" == "~none" ]]
 		then
 			OLDPLAYERLASTFOLD=$(grep PlayerLastFold $PLAYERFILE/$1 | cut -d= -f2- | tr -d ' ')
 			CURRENTTIME=$(date +%s)
 			ADJUSTEDTIME=$(( $CURRENTTIME - 600 ))
 			if [ "$ADJUSTEDTIME" -gt "$OLDPLAYERLASTFOLD" ]
 			then
-				SECTOR[$1]=$(grep "PlayerLocation=" $PLAYERFILE/$1 | cut -d= -f2)
-				DISTANCE=$(echo "($(echo ${SECTOR[$1]} | cut -d"," -f1)- $2)^2+($(echo ${SECTOR[$1]} | cut -d"," -f2)- $3)^2+($(echo ${SECTOR[$1]} | cut -d"," -f3)- $4)^2" | bc)
+				SECTOR=$(grep "PlayerLocation=" $PLAYERFILE/$1 | cut -d= -f2)
+				DISTANCE=$(echo "($(echo ${SECTOR} | cut -d"," -f1)- $2)^2+($(echo ${SECTOR} | cut -d"," -f2)- $3)^2+($(echo ${SECTOR} | cut -d"," -f3)- $4)^2" | bc)
 				if [ "$DISTANCE" -le "$FOLDLIMIT" ]
 				then
 					WARMUP=50
 					as_user "sed -i 's/PlayerLastFold=$OLDPLAYERLASTFOLD/PlayerLastFold=$CURRENTTIME/g' $PLAYERFILE/$1"
 					as_user "screen -p 0 -S $SCREENID -X stuff $'/pm $1 Engaging fold calculations please allow 60 seconds to engage\n'"
-					while [ "$WARMUP" -ge 0 ] && [[ "$(grep "PlayerControllingType=" $PLAYERFILE/$1 | cut -d= -f2)" == "Ship" ]]
+					while [ "$WARMUP" -ge 0 ] && [[ "$(grep "PlayerControllingType=" $PLAYERFILE/$1 | cut -d= -f2)" == "Ship" ]] && [[ "$(grep -- $CONTROLLINGOBJECT $SHIPLOG | cut -d"<" -f2 | cut -d">" -f1)" == "~none" ]]
 					do
 						sleep 1
 						let WARMUP--
 					done
-					if [[ "$(grep "PlayerControllingType=" $PLAYERFILE/$1 | cut -d= -f2)" == "Ship" ]]
+					if [[ "$(grep "PlayerControllingType=" $PLAYERFILE/$1 | cut -d= -f2)" == "Ship" ]] && [[ "$(grep -- $CONTROLLINGOBJECT $SHIPLOG | cut -d"<" -f2 | cut -d">" -f1)" == "~none" ]]
 					then
 						COUNTDOWN=10
 						as_user "screen -p 0 -S $SCREENID -X stuff $'/pm $1 Engaging fold in...\n'"
-						while [ $COUNTDOWN -ge 0 ] && [[ "$(grep "PlayerControllingType=" $PLAYERFILE/$1 | cut -d= -f2)" == "Ship" ]]
+						while [ $COUNTDOWN -ge 0 ] && [[ "$(grep "PlayerControllingType=" $PLAYERFILE/$1 | cut -d= -f2)" == "Ship" ]] && [[ "$(grep -- $CONTROLLINGOBJECT $SHIPLOG | cut -d"<" -f2 | cut -d">" -f1)" == "~none" ]]
 						do
 							as_user "screen -p 0 -S $SCREENID -X stuff $'/pm $1 $COUNTDOWN ...\n'"
 							sleep 1
 							let COUNTDOWN--
 						done
-						if [[ "$(grep "PlayerControllingType=" $PLAYERFILE/$1 | cut -d= -f2)" == "Ship" ]]
+						if [[ "$(grep "PlayerControllingType=" $PLAYERFILE/$1 | cut -d= -f2)" == "Ship" ]] && [[ "$(grep -- $CONTROLLINGOBJECT $SHIPLOG | cut -d"<" -f2 | cut -d">" -f1)" == "~none" ]]
 						then
 							as_user "screen -p 0 -S $SCREENID -X stuff $'/pm $1 Folding Space...\n'"
 							sleep 0.1
@@ -2977,10 +2978,10 @@ function COMMAND_FOLD(){
 							sleep 0.1
 							as_user "screen -p 0 -S $SCREENID -X stuff $'/pm $1 Fold Successful! You have emerged in sector $2,$3,$4\n'"
 						else
-							as_user "screen -p 0 -S $SCREENID -X stuff $'/pm $1 You exited your ship causing the fold to fail! Your engines need to cool down still before you can jump again!\n'"
+							as_user "screen -p 0 -S $SCREENID -X stuff $'/pm $1 Your ship entered a state that means it cannot activate its fold drive! Your engines need to cool down still before you can jump again!\n'"
 						fi
 					else
-						as_user "screen -p 0 -S $SCREENID -X stuff $'/pm $1 You exited your ship causing the fold to fail! Your engines need to cool down still before you can jump again!\n'"
+						as_user "screen -p 0 -S $SCREENID -X stuff $'/pm $1 Your ship entered a state that means it cannot activate its fold drive! Your engines need to cool down still before you can jump again!\n'"
 					fi
 				else
 					as_user "screen -p 0 -S $SCREENID -X stuff $'/pm $1 Your fold engines dont have the power to launch you that far!\n'"
@@ -2989,7 +2990,7 @@ function COMMAND_FOLD(){
 				as_user "screen -p 0 -S $SCREENID -X stuff $'/pm $1 Please allow your fold drive to cooldown. It will take $((600-($(date +%s)-$(grep "PlayerLastFold=" $PLAYERFILE/$1 | cut -d= -f2)))) seconds.\n'"
 			fi
 		else
-			as_user "screen -p 0 -S $SCREENID -X stuff $'/pm $1 Please enter a ship to use a fold drive!\n'"
+			as_user "screen -p 0 -S $SCREENID -X stuff $'/pm $1 Please enter an undocked ship to use a fold drive!\n'"
 		fi
 	fi
 }
@@ -3072,7 +3073,8 @@ function COMMAND_JUMP(){
 		then
 			SECTOR=$(grep "PlayerLocation=" $PLAYERFILE/$1 | cut -d= -f2)
 			CONTROLLINGTYPE=$(grep "PlayerControllingType=" $PLAYERFILE/$1 | cut -d= -f2)
-			if [[ "$CONTROLLINGTYPE" == "Ship" ]]
+			CONTROLLINGOBJECT=$(grep "PlayerControllingObject=" $PLAYERFILE/$1 | cut -d= -f2)
+			if [[ "$CONTROLLINGTYPE" == "Ship" ]] && [[ "$(grep -- $CONTROLLINGOBJECT $SHIPLOG | cut -d"<" -f2 | cut -d">" -f1)" == "~none" ]]
 			then
 #				Check if the player is in a jump gate sector (-- tells grep its the end of parameters due to negative sectors confusing it)
 				if grep -q -- "$SECTOR" $GATELOG
@@ -3105,14 +3107,14 @@ function COMMAND_JUMP(){
 							SECTORA=$SECTOR
 							SECTOR=$(grep "PlayerLocation=" $PLAYERFILE/$1 | cut -d= -f2)
 							CONTROLLINGTYPE=$(grep "PlayerControllingType=" $PLAYERFILE/$1 | cut -d= -f2)
-							if [[ "$SECTORA" == "$SECTOR" ]] && [[ "$CONTROLLINGTYPE" == "Ship" ]]
+							if [[ "$SECTORA" == "$SECTOR" ]] && [[ "$CONTROLLINGTYPE" == "Ship" ]] && [[ "$(grep -- $CONTROLLINGOBJECT $SHIPLOG | cut -d"<" -f2 | cut -d">" -f1)" == "~none" ]]
 							then
 #								teleports the user to the destination gate
 								as_user "screen -p 0 -S $SCREENID -X stuff $'/change_sector_for $1 $(grep " $2 " $GATELOG | cut -d":" -f3 | cut -d" " -f2 | tr "," " ")\n'"
 								as_user "screen -p 0 -S $SCREENID -X stuff $'/pm $1 You have sucessfully jumped to $2!\n'"
 							else
 #								user moved, so teleport doesnt happen
-								as_user "screen -p 0 -S $SCREENID -X stuff $'/pm $1 You went outside the range of the gate or exited your ship! Your jump failed\n'"
+								as_user "screen -p 0 -S $SCREENID -X stuff $'/pm $1 You went outside the range of the gate or your ship entered an un-jumpable state! Your jump failed\n'"
 							fi
 						else
 							as_user "screen -p 0 -S $SCREENID -X stuff $'/pm $1 There is no gate by that name! (Jump gates are case sensitive)\n'"
@@ -3124,14 +3126,14 @@ function COMMAND_JUMP(){
 					as_user "screen -p 0 -S $SCREENID -X stuff $'/pm $1 There is no jump gate where you are. Use !JUMPLIST to get all the jump gates available\n'"
 				fi
 			else
-				as_user "screen -p 0 -S $SCREENID -X stuff $'/pm $1 You cannot jump unless you are in a ship!\n'"
+				as_user "screen -p 0 -S $SCREENID -X stuff $'/pm $1 You cannot jump unless you are in an undocked ship!\n'"
 			fi
 		else
 			as_user "screen -p 0 -S $SCREENID -X stuff $'/pm $1 Your ships engines are still cooling down from your last jump. They will take roughly $(($(grep "JumpDisabled=" $PLAYERFILE/$1 | cut -d= -f2)-$(date +%s))) seconds\n'"
 		fi
 	fi
 }
-function COMMAND_UPGRADEJUMP(){ #Look at let statements with cutting of " " for compatibility with new = format
+function COMMAND_UPGRADEJUMP(){
 #Increases the teir of the specified jump gate by 1 at the cost of voting points. This reduces warm up and cooldown time.
 #USAGE: !UPGRADEJUMP <JumpName>
 	if [ "$#" -ne "2" ]
