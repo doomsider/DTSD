@@ -2060,23 +2060,23 @@ fi
 }
 update_file() {
 #echo "Starting Update"
-echo "$1 is the write function to update the old config filename"
-echo "$2 is the name of the specific file for functions like playerfile or factionfile"
+#echo "$1 is the write function to update the old config filename"
+#echo "$2 is the name of the specific file for functions like playerfile or factionfile"
 # Grab first occurrence of value from the Daemon file itself to be used to determine correct path
 DLINE=$(grep -n -m 1 $1 $DAEMONPATH | cut -d : -f 1)
-echo "This is the starting line for the write function $DLINE"
+#echo "This is the starting line for the write function $DLINE"
 let DLINE++
 EXTRACT=$(sed -n "${DLINE}p" $DAEMONPATH)
 echo "Here is the second line of write funtion $EXTRACT"
 if [ "$#" -eq "2" ]
 then
 	PATHUPDATEFILE=$(echo $EXTRACT | cut -d$ -f2- | cut -d/  -f1)
-	echo "Extraction from Daemon $PATHUPDATEFILE"
+#	echo "Extraction from Daemon $PATHUPDATEFILE"
 	PATHUPDATEFILE=${!PATHUPDATEFILE}/$2
-	echo "modified directory $PATHUPDATEFILE"
+#	echo "modified directory $PATHUPDATEFILE"
 else
 	PATHUPDATEFILE=$(echo $EXTRACT | cut -d$ -f2- | cut -d" " -f1)
-	echo "This is what was extracted from the Daemon $PATHUPDATEFILE"
+#	echo "This is what was extracted from the Daemon $PATHUPDATEFILE"
 # Set the path to what the source of the config file value is
 	PATHUPDATEFILE=${!PATHUPDATEFILE}
 	cp $PATHUPDATEFILE $PATHUPDATEFILE.old
@@ -2132,18 +2132,24 @@ update_file write_configpath
 update_file write_barredwords
 update_file write_tipfile
 update_file write_rankcommands
-for PUPDATE in $PLAYERFILE/*
+PUPDATE=( $(ls $PLAYERFILE) )
+PARRAY=0
+while [ -n "${PUPDATE[$PARRAY]+set}" ] 
 do
-PLAYERNAME=${PUPDATE##*/}
-update_file write_playerfile $PLAYERNAME
+update_file write_playerfile ${PUPDATE[$PARRAY]}
+echo "${PUPDATE[$PARRAY]} file is being updated"
+let PARRAY++
 done
-for FUPDATE in $FACTIONFILE/*
+FUPDATE=( $(ls $FACTIONFILE) )
+FARRAY=0
+while [ -n "${FUPDATE[$FARRAY]+set}" ] 
 do
-FACTIONNAME=${FUPDATE##*/}
-update_file write_playerfile $FACTIONNAME
+update_file write_factionfile ${FUPDATE[$FARRAY]}
+echo "${FUPDATE[$FARRAY]} file is being updated"
+let FARRAY++
 done
 CURRENTHASH=$(md5sum $DAEMONPATH |  cut -d" " -f1 | tr -d ' ')
-#Update the HASH
+# Update the HASH
 as_user "sed -i 's/HASH=.*/HASH=$CURRENTHASH/g' $CONFIGPATH"
 }
 
