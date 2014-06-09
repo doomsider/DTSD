@@ -2132,12 +2132,12 @@ update_file write_configpath
 update_file write_barredwords
 update_file write_tipfile
 update_file write_rankcommands
-for PUPDATE in /home/user/playerfiles/*
+for PUPDATE in $PLAYERFILE/*
 do
 PLAYERNAME=${PUPDATE##*/}
 update_file write_playerfile $PLAYERNAME
 done
-for FUPDATE in /home/user/factionfiles/*
+for FUPDATE in $FACTIONFILE/*
 do
 FACTIONNAME=${FUPDATE##*/}
 update_file write_playerfile $FACTIONNAME
