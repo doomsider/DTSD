@@ -1,121 +1,104 @@
 #!/bin/bash
-#  Doomsider's and Titanmasher's Daemon Script for Starmade.  init.d script 7/10/13 based off of http://paste.boredomsoft.org/main.php/view/62107887
-#  All credits to Andrew for his initial work
-#  Version .16 5/27/2014
-#  Jstack for a dump has been added into the ebrake command to be used with the detect command to see if server is responsive.
-#  These dumps will be in starterpath/logs/threaddump.log and can be submitted to Schema to troubleshoot server crashes
-#  !!!You must update starmade.cfg for the Daemon to work on your setup!!!
-#test
+# Doomsider's and Titanmasher's Daemon Script for Starmade.  init.d script 7/10/13 based off of http://paste.boredomsoft.org/main.php/view/62107887
+# All credits to Andrew for his initial work
+# Version .17 6/8/2014
+# Jstack for a dump has been added into the ebrake command to be used with the detect command to see if server is responsive.
+# These dumps will be in starterpath/logs/threaddump.log and can be submitted to Schema to troubleshoot server crashes
+# !!!You must update starmade.cfg for the Daemon to work on your setup!!!
+# The daemon should be ran from the intended user as it detects and writes the current username to the configuration file
+
+#For development purposes update check can be turned off
+UPDATECHECK=NO
+# Set the basics paths for the Daemon automatically.  This can be changed if needed for alternate configurations
 # This sets the path of the script to the actual script directory.  This is some magic I found on stackoverflow http://stackoverflow.com/questions/4774054/reliable-way-for-a-bash-script-to-get-the-full-path-to-itself	
 DAEMONPATH=$(cd `dirname "${BASH_SOURCE[0]}"` && pwd)/`basename "${BASH_SOURCE[0]}"`
 CONFIGPATH="$(echo $DAEMONPATH | cut -d"." -f1).cfg"
 # Set the starter path to the correct directory.  rev here is used to make the string backwards so that it can be cut at the last forward slash 
 STARTERPATH=$(echo $DAEMONPATH | rev | cut -d"/" -f2- | rev)
-# Since this is a Daemon it can be called on from anywhere from just about anything.  This routine below ensures the Daemon is using the proper user for the correct privledges
 ME=`whoami`
+# Grab the current hash from the Daemon
+CURRENTHASH=$(md5sum $DAEMONPATH |  cut -d" " -f1 | tr -d ' ')
+# Since this is a Daemon it can be called on from anywhere from just about anything.  This function below ensures the Daemon is using the proper user for the correct privileges
+as_user() {
+if [ "$ME" == "$USERNAME" ] ; then
+bash -c "$1"
+else
+su - $USERNAME -c "$1"
+fi
+}
+
+#------------------------------Daemon functions-----------------------------------------
+
+sm_config() {
+# Check to see if the config file is in place, if it is then see if an update is needed.  If it does not exist create it and other needed files and directories.
 if [ -e $CONFIGPATH ]
 then
-#	echo "Reading from Source $CONFIGPATH"
+	if [ "$UPDATECHECK" = "YES" ]
+	then
+		echo "Checking HASH to see if Daemon was updated"
+# Grab the hash from the config file and compare it tot he Daemon's hash to see if the Daemon has been updated	
+		CONFIGHASH=$(grep HASH $CONFIGPATH | cut -d= -f2 | tr -d ' ')
+		if [ "$CONFIGHASH" = "$CURRENTHASH" ]
+		then
+			echo "No update detected, Reading from Source $CONFIGPATH"
+			source $CONFIGPATH
+		else
+			echo "Changes detected updating config files"
+# Here is where update will take place
+			update_daemon
 # Source read from another file.  In this case it is the config file containing all the settings for the Daemon
-	source $CONFIGPATH
+			source $CONFIGPATH
+		fi
+	else
+		echo "Update check is turned off reading source from config file"
+		source $CONFIGPATH
+	fi
 else
 # If no config file present set the username temporarily to the current user
-USERNAME=$(whoami)
-#echo "This is USERNAME from whoami $USERNAME"
-#echo "Config file missing"
-fi
-
-as_user() { 
-if [ "$ME" == "$USERNAME" ] ; then
-	bash -c "$1"
-else
-	su - $USERNAME -c "$1"
-fi
-}
-create_config(){
-CONFIGCREATE="cat > $CONFIGPATH <<_EOF_
-#  Settings below can all be custom tailored to any setup.
-#  Username is your user on the server that runs starmade
-#  Backupname is the name you want your backup file to have
-#  Service is the name of your Starmade jar file 
-#  Backup is the path you want to move you backups to
-#  Starterpath is where you starter file is located.  Starmade folder will be located in this directory
-#  Maxmemory controls the total amount Java can use.  It is the -xmx variable in Java
-#  Minmemory is the inital amounr of memory to use.  It is the -xms variable in Java
-#  Port is the port that Starmade will use.  Set to 4242 by default.
-#  Logging is for turning on or off with a YES or a NO
-#  Daemon Path is only used if you are going to screen log
-#  Server key is for the rewards and voting function and is setup for http://starmade-servers.com/
-SERVICE='StarMade.jar' #The name of the .jar file to be run
-USERNAME="$USERNAME" #Your login name
-BACKUP='/home/$USERNAME/starbackup' #The location where all backups created are saved
-BACKUPNAME='Star_Backup_' #Name of the backups
-MAXMEMORY=512m #Java setting. Max memory assigned to the server
-MINMEMORY=256m #Java setting. Min memory assigned to the server
-PORT=4242 #The port the server will run on
-SCREENID=smserver #Name of the screen the server will be run on
-SCREENLOG=smlog #Name of the screen logging will be run on
-LOGGING=YES #Determines if logging will be active (YES/NO))
-SERVERKEY="00000000000000000000" #Server key found at starmade-servers.com (used for voting rewards)
-
-#------------------------Logging files----------------------------------------------------------------------------
-
-RANKCOMMANDS=$STARTERPATH/logs/rankcommands.log #The file that contains all the commands each rank is allowed to use
-SHIPLOG=$STARTERPATH/logs/ship.log #The file that contains a record of all the ships with their sector location and the last person who entered it
-CHATLOG=$STARTERPATH/logs/chat.log #The file that contains a record of all chat messages sent
-BOUNTYLOG=$STARTERPATH/logs/bounty.log #The file that contains all bounty records
-GATELOG=$STARTERPATH/logs/gates.log #The file that contains all the jump gates and their details
-PLAYERFILE=$STARTERPATH/playerfiles #The directory that contains all the individual player files which store player information
-MAILFILE=$STARTERPATH/mail #The directory that contains all player mail
-GATEWHITELIST=$STARTERPATH/gatewhitelist #The directory that contains all the individual player files which store who is allowed to access their jump gates
-KILLLOG=$STARTERPATH/logs/kill.log #The file with a record of all deaths on the server
-ADMINLOG=$STARTERPATH/logs/admin.log #The file with a record of all admin commands issued
-GUESTBOOK=$STARTERPATH/logs/guestbook.log #The file with a record of all the logouts on the server
-STATIONLOG=$STARTERPATH/logs/station.log #The file that contains all of the stations on the server
-PLANETLOG=$STARTERPATH/logs/planet.log #The file that contains all of the planets on the server
-SHIPBUYLOG=$STARTERPATH/logs/shipbuy.log #The file that contains all the ships spawned on the server
-BANKLOG=$STARTERPATH/logs/bank.log #The file that contains all transactions made on the server
-
-#-------------------------Spam Settings-------------------------------------------------------------------
-
-SPAMPREVENTION=Yes # Turns on or off the SpamPrevention system (Yes/No)
-SPAMLIMIT=5 # The number of messages that can be sent within the $SPAMTIMER before a player will be warned
-SPAMTIMER=10 # The time taken for the message counter to reduce by one after sending a chat message
-SPAMALLOWANCE=2 # The number of messages allowed between receiving the warning and being kicked
-SPAMKICKLIMIT=2 # The number of kicks from the server before the player is banned (Set to really high to turn off)
-
-
-#------------------------Game settings----------------------------------------------------------------------------
-
-GATECOST=50 #Number of voting points needed to spawn a gate
-#Gate level stats. GATETEIR[LEVEL]=\"vote-cost warm-up-time cool-down-time\" Can be expanded following the same format infinitely
-GATETEIR[1]=\"0 15 180\"
-GATETEIR[2]=\"2 13 160\"
-GATETEIR[3]=\"3 11 140\"
-GATETEIR[4]=\"5 9 120\"
-GATETEIR[5]=\"8 7 110\"
-GATETEIR[6]=\"10 5 90\"
-GATETEIR[7]=\"15 5 80\"
-GATETEIR[8]=\"20 5 70\"
-GATETEIR[9]=\"30 5 60\"
-GATEREFUND=90 #percentage of the cost of the gate that players get back
-VOTECHECKDELAY=10 #The time in seconds between each check of starmade-servers.org
-FOLDLIMIT=900 #Due to the way bash square roots numbers, this is the square of the distance limit to be more accurate with distances
-UNIVERSEBOARDER=YES #Turn on and off the universe boarder (YES/NO)
-UNIVERSECENTER=\"2,2,2\" #Set the center of the universe boarder
-UNIVERSERADIUS=50 #Set the radius of the universe boarder around 
-STARTINGRANK=Ensign #The initial rank players recieve when they log in for the first time. Can be edited.
-_EOF_"
-as_user "$CONFIGCREATE"
-}
-# If the configuration file exists
-if [[ ! -f $CONFIGPATH ]]
-then
+	USERNAME=$(whoami)
 	echo "Creating configuration file please edit configuration file (ie: starmade.cfg) or script may not function as intended"
-# This creates the config file.  This is the only file alteration that does not use as_user.  Therefore the Daemon should be ran by the intended user
-	create_config
-	exit	
+# The following creates the directories and configuration files
+	write_configpath
+	source $CONFIGPATH
+	sm_checkdir
+	create_tipfile
+	create_barredwords
+	create_rankscommands
+	exit
 fi
+}
+sm_checkdir() {
+if [ ! -d "$STARTERPATH/logs" ]
+then
+	echo "No logs directory detected creating for logging"
+	as_user "mkdir $STARTERPATH/logs"
+fi
+if [ ! -d "$PLAYERFILE" ]
+then
+	echo "No playerfile directory detected creating for logging"
+	as_user "mkdir $PLAYERFILE"
+fi
+if [ ! -d "$GATEWHITELIST" ]
+then
+	echo "No gatewhitelist directory detected creating for logging"
+	as_user "mkdir $GATEWHITELIST"
+fi
+if [ ! -d "$MAILFILE" ]
+then
+	echo "No mailfile directory detected creating for logging"
+	as_user "mkdir $MAILFILE"
+fi
+if [ ! -d "$FACTIONFILE" ]
+then
+	echo "No factionfile directory detected creating for logging"
+	as_user "mkdir $FACTIONFILE"
+fi
+if [ ! -d "$STARTERPATH/oldlogs" ]
+then
+	echo "No oldlogs directory detected creating for logging"
+	as_user "mkdir $STARTERPATH/oldlogs"
+fi
+}
 sm_start() { 
 # Wipe and dead screens to prevent a false positive for a running Screenid
 screen -wipe
@@ -131,28 +114,8 @@ then
 	echo "Tried to start but $SERVICE was already running!"
 else
 	echo "$SERVICE was not running... starting."
-	cd $STARTERPATH/StarMade
 # Check to see if logs and other directories exists and create them if they do not
-    if [ ! -d "$STARTERPATH/logs" ]
-    then
-		echo "No logs directory detected creating for logging"
-		as_user "mkdir $STARTERPATH/logs"
-    fi
-	if [ ! -d "$PLAYERFILE" ]
-    then
-		echo "No playerfile directory detected creating for logging"
-		as_user "mkdir $PLAYERFILE"
-    fi
-	if [ ! -d "$GATEWHITELIST" ]
-    then
-		echo "No gatewhitelist directory detected creating for logging"
-		as_user "mkdir $GATEWHITELIST"
-    fi
-	if [ ! -d "$MAILFILE" ]
-    then
-		echo "No mailfile directory detected creating for logging"
-		as_user "mkdir $MAILFILE"
-    fi
+	sm_checkdir
 # Make sure screen log is shut down just in case it is still running    
     if ps aux | grep -v grep | grep $SCREENLOG >/dev/null
     then
@@ -163,10 +126,11 @@ else
 # Check for the output.log and if it is there move it and save it with a time stamp
     if [ -e $STARTERPATH/logs/output.log ] 
     then
-		MOVELOG=$STARTERPATH/logs/output_$(date '+%b_%d_%Y_%H.%M.%S').log
+		MOVELOG=$STARTERPATH/oldlogs/output_$(date '+%b_%d_%Y_%H.%M.%S').log
 		as_user "mv $STARTERPATH/logs/output.log $MOVELOG"
     fi
 # Execute the server in a screen while using tee to move the Standard and Error Output to output.log
+	cd $STARTERPATH/StarMade
 	as_user "screen -dmS $SCREENID -m sh -c 'java -Xmx$MAXMEMORY -Xms$MINMEMORY -jar $SERVICE -server -port:$PORT 2>&1 | tee $STARTERPATH/logs/output.log'"
 # Created a limited loop to see when the server starts
     for LOOPNO in {0..7}
@@ -182,6 +146,7 @@ else
     if ps aux | grep $SERVICE | grep -v grep | grep -v tee | grep port:$PORT >/dev/null 
     then
 		echo "$SERVICE is now running."
+		as_user "echo '' > $ONLINELOG"
 # Start sm_screemlog if logging is set to yes
 		if [ "$LOGGING" = "YES" ]
 		then
@@ -427,6 +392,7 @@ then
 # This was added in to troubleshoot freezes at the request of Schema
 		jstack $PID >> $STARTERPATH/logs/threaddump.log  
 		kill -9 $PID
+		echo $SERVICE has to be forcibly closed. A thread dump has been taken and is saved at $STARTERPATH/logs/threaddump.log and should be sent to schema.
 		screen -wipe
 	fi
 else
@@ -479,7 +445,7 @@ then
 # Check to see if existing screen log exists and if so move and rename it
 		if [ -e $STARTERPATH/logs/screen.log ] 
 		then
-			MOVELOG=$STARTERPATH/logs/screen_$(date '+%b_%d_%Y_%H.%M.%S').log
+			MOVELOG=$STARTERPATH/oldlogs/screen_$(date '+%b_%d_%Y_%H.%M.%S').log
 			as_user "mv $STARTERPATH/logs/screen.log $MOVELOG"
 		fi
 		STARTLOG="$DAEMONPATH log"
@@ -569,7 +535,7 @@ then
 # Ban that IP
 			as_user "screen -p 0 -S $SCREENID -X stuff $'/ban_ip $BANNEDIP\n'"
 # Keep from spamming commands to fast to server
-			sleep 2
+			sleep 1
 # Add 1 to the array
 			let BANARRAY++
 		done
@@ -609,6 +575,7 @@ echo "Please install Java JDK (ie: openjdk-7-jdk) to make dumps"
 fi
 }
 sm_help() {
+echo "updatefiles - Updates all stored files to the latest format, if a change is needed"
 echo "start - Starts the server"
 echo "stop - Stops the server with a server message and countdown approx 2 mins"
 echo "ebrake - Stop the server without a server message approx 30 seconds"
@@ -641,22 +608,12 @@ sm_log() {
 SM_LOG_PID=$$
 # Chat commands are controlled by /playerfile/playername which contains the their rank and 
 # rankcommands.log which has ranks followed by the commands that they are allowed to call
-autovoteretrieval &
-# Checks to see if rankcommands.log exists and if not create a basic one
 echo "Logging started at $(date '+%b_%d_%Y_%H.%M.%S')"
-if [ -e $RANKCOMMANDS ]; then
-	RANKCOMMANDSEXIST=1
-	else
-    CREATERANK="cat > $RANKCOMMANDS <<_EOF_
-Ensign MAIL POSTBOUNTY LISTBOUNTY COLLECTBOUNTY FOLD ADDJUMP JUMPLIST JUMP UPGRADEJUMP DESTROYJUMP DEPOSIT WITHDRAW TRANSFER BALANCE RANKME RANKLIST RANKCOMMAND PLAYERWHITELIST VOTEBALANCE HELP CORE SEARCH CLEAR LISTWHITE GIVEHARD GIVENORMAL GIVE TELEPORT PROTECT UNPROTECT SPAWNSTOP SPAWNSTART
-Lieutenant MAIL POSTBOUNTY LISTBOUNTY COLLECTBOUNTY FOLD ADDJUMP JUMPLIST JUMP UPGRADEJUMP DESTROYJUMP DEPOSIT WITHDRAW TRANSFER BALANCE RANKME RANKLIST RANKCOMMAND PLAYERWHITELIST VOTEBALANCE HELP CORE SEARCH CLEAR LISTWHITE WHITEADD KICK
-Commander MAIL POSTBOUNTY LISTBOUNTY COLLECTBOUNTY FOLD ADDJUMP JUMPLIST JUMP UPGRADEJUMP DESTROYJUMP DEPOSIT WITHDRAW TRANSFER BALANCE RANKME RANKLIST RANKCOMMAND PLAYERWHITELIST VOTEBALANCE HELP CORE SEARCH CLEAR LISTWHITE WHITEADD KICK BANPLAYER UNBAN
-Captain MAIL POSTBOUNTY LISTBOUNTY COLLECTBOUNTY FOLD ADDJUMP JUMPLIST JUMP UPGRADEJUMP DESTROYJUMP DEPOSIT WITHDRAW TRANSFER BALANCE RANKME RANKLIST RANKCOMMAND PLAYERWHITELIST VOTEBALANCE HELP CORE SEARCH CLEAR LISTWHITE WHITEADD KICK BANPLAYER UNBAN RESTART DESPAWN KILL BANHAMMER TELEPORT PROTECT UNPROTECT SPAWNSTOP SPAWNSTART
-Admiral MAIL POSTBOUNTY LISTBOUNTY COLLECTBOUNTY FOLD ADDJUMP JUMPLIST JUMP UPGRADEJUMP DESTROYJUMP DEPOSIT WITHDRAW TRANSFER BALANCE RANKME RANKLIST RANKCOMMAND PLAYERWHITELIST VOTEBALANCE HELP CORE SEARCH CLEAR LISTWHITE MAILALL ADMINADDJUMP ADMINDELETEJUMP RANKSET RANKUSER BANHAMMER KILL WHITEADD BANPLAYER UNBAN SHUTDOWN RESTART CREDITS IMPORT EXPORT DESPAWN LOADSHIP GIVE GIVENORMALGIVEHARD KICK GODON GODOFF INVISION INVISIOFF TELEPORT PROTECT UNPROTECT SPAWNSTOP SPAWNSTART MYDETAILS ADMINCOOLDOWN ADMINREADFILE THREADDUMP
-Admin -ALL-
-_EOF_"
-	as_user "$CREATERANK"
-	fi
+autovoteretrieval &
+randomhelptips &
+sectorincome &
+sectorfees &
+create_rankscommands
 # Create the Gate whitelist file if it doesnt exist
 	mkdir -p $GATEWHITELIST
 # Create the playerfile folder if it doesnt exist
@@ -766,22 +723,13 @@ _EOF_"
 		done
 	done	
 }
+
+#------------------------------Core logging functions-----------------------------------------
+
 log_playerinfo() { 
 #Checks if the player has a mailbox file
 #echo "$1 is the player name"
-if [ -e $MAILFILE/$1 ]
-then
-	UNREADCOUNT=$(grep "UnreadMail" $MAILFILE/$1 | cut -d" " -f2)
-else
-	echo "UnreadMail: 1 CurrentMailId: 1" >> $MAILFILE/$1
-	echo "MessageID: 0 Unread: Yes Sender: MailBoxPro Time: $(date +%s) Message: Welcome to the mail box $1! Type !MAIL HELP to see how to use the mail box!" >> $MAILFILE/$1
-	UNREADCOUNT=1
-fi
-#checks if the player has any unread mail
-if [ $UNREADCOUNT -gt "0" ]
-then
-	as_user "screen -p 0 -S $SCREENID -X stuff $'/pm $1 You have $UNREADCOUNT unread mail. Type !MAIL LIST Unread to see all unread mail.\n'"
-fi
+create_playerfile $1
 as_user "screen -p 0 -S $SCREENID -X stuff $'/player_info $1\n'"
 sleep 2
 if tac $STARTERPATH/logs/output.log | grep -m 1 -A 10 "Name: $1" >/dev/null
@@ -798,6 +746,12 @@ then
 	PCREDITS=$(echo ${PLAYERINFO[4]} | cut -d: -f2 | cut -d" " -f2)
 #echo "Credits are $PCREDITS"
 	PFACTION=$(echo ${PLAYERINFO[5]} | cut -d= -f2 | cut -d, -f1)
+	if [ "$PFACTION" -eq "$PFACTION" ] 2>/dev/null
+	then
+		PFACTION=$PFACTION
+	else
+		PFACTION="None"
+	fi
 #echo "Faction id is $PFACTION"
 	PSECTOR=$(echo ${PLAYERINFO[6]} | cut -d\( -f2 | cut -d\) -f1 | tr -d ' ')
 #echo "Player sector is $PSECTOR"
@@ -812,57 +766,19 @@ then
 	then
 		PCONTROLOBJECT=$(echo ${PLAYERINFO[7]} | cut -d: -f2 | cut -d" " -f2 | cut -d[ -f1)
 #		echo "Player controlled object is $PCONTROLOBJECT"
-		PCONTROLTYPE=$(echo ${PLAYERINFO[7]} | rev | cut -d_ -f1 | rev | cut -d\) -f1)
+		PCONTROLTYPE=Spacesuit
 #		echo "Player controlled entity type $PCONTROLTYPE"
 	fi
-	PLASTLOGIN=$(echo ${PLAYERINFO[9]} | cut -d= -f2 | cut -d, -f1)
-#echo "Player last logged in $PLASTLOGIN"
 	PLASTUPDATE=$(date +%s)
 #echo "Player file last update is $PLASTUPDATE"
-	if [ -e $PLAYERFILE/$1 ] 
-	then
-#	echo "Player exists, updating player file"
-		as_user "sed -i 's/CurrentIP: .*/CurrentIP: $PIP/g' $PLAYERFILE/$1"
-		as_user "sed -i 's/CurrentCredits: .*/CurrentCredits: $PCREDITS/g' $PLAYERFILE/$1"
-		as_user "sed -i 's/PlayerFaction: .*/PlayerFaction: $PFACTION/g' $PLAYERFILE/$1"
-		as_user "sed -i 's/PlayerLocation: .*/PlayerLocation: $PSECTOR/g' $PLAYERFILE/$1"
-		as_user "sed -i 's/PlayerControllingType: .*/PlayerControllingType: $PCONTROLTYPE/g' $PLAYERFILE/$1"
-		as_user "sed -i 's/PlayerControllingObject: .*/PlayerControllingObject: $PCONTROLOBJECT/g' $PLAYERFILE/$1"
-		as_user "sed -i 's/PlayerLastLogin: .*/PlayerLastLogin: $PLASTLOGIN/g' $PLAYERFILE/$1"
-		as_user "sed -i 's/PlayerLastUpdate: .*/PlayerLastUpdate: $PLASTUPDATE/g' $PLAYERFILE/$1"
-		as_user "sed -i 's/PlayerLoggedIn: .*/PlayerLoggedIn: Yes/g' $PLAYERFILE/$1"
-	else
-#		echo "Player file does not exist, creating"
-		WRITEPLAYERFILE="cat > $PLAYERFILE/$1 <<_EOF_
-Made on $(date)
-Rank: [$STARTINGRANK]
-CreditsInBank: 0
-VotingPoints: 0
-CurrentVotes: 0
-Bounty: 0
-WarpTeir: 1
-JumpDisabled: 0
-CommandConfirm: 0
-CurrentIP: $PIP
-CurrentCredits: $PCREDITS
-PlayerFaction: $PFACTION
-PlayerLocation: $PSECTOR
-PlayerControllingType: $PCONTROLTYPE
-PlayerControllingObject: $PCONTROLOBJECT
-PlayerLastLogin: $PLASTLOGIN
-PlayerLastCore: 0
-PlayerLastFold: 0
-PlayerLastUpdate: $(date +%s)
-PlayerLastKilled: None
-PlayerKilledBy: None
-PlayerLoggedIn: Yes
-PlayerNeedsUpdating: No
-ChatCount: 0
-SpamWarning: No
-SpamKicks: 0
-_EOF_"
-		as_user "$WRITEPLAYERFILE"
-	fi
+	as_user "sed -i 's/CurrentIP=.*/CurrentIP=$PIP/g' $PLAYERFILE/$1"
+	as_user "sed -i 's/CurrentCredits=.*/CurrentCredits=$PCREDITS/g' $PLAYERFILE/$1"
+	as_user "sed -i 's/PlayerFaction=.*/PlayerFaction=$PFACTION/g' $PLAYERFILE/$1"
+	as_user "sed -i 's/PlayerLocation=.*/PlayerLocation=$PSECTOR/g' $PLAYERFILE/$1"
+	as_user "sed -i 's/PlayerControllingType=.*/PlayerControllingType=$PCONTROLTYPE/g' $PLAYERFILE/$1"
+	as_user "sed -i 's/PlayerControllingObject=.*/PlayerControllingObject=$PCONTROLOBJECT/g' $PLAYERFILE/$1"
+	as_user "sed -i 's/PlayerLastUpdate=.*/PlayerLastUpdate=$PLASTUPDATE/g' $PLAYERFILE/$1"
+	as_user "sed -i 's/PlayerLoggedIn=.*/PlayerLoggedIn=Yes/g' $PLAYERFILE/$1"
 fi
 }
 log_chatlogging() { 
@@ -884,7 +800,6 @@ then
 # Format the whisper mesage for the log
 			WHISPERMESSAGE="$(date '+%b_%d_%Y_%H.%M.%S') - \($PWHISPERER\) whispered to \($PWHISPERED\) '$PLAYERCHAT'"
 			as_user "echo $WHISPERMESSAGE >> $CHATLOG"
-			spam_prevention $PWHISPERED
 # If not a whiper then
 		fi
 		if echo $CHATGREP | grep Server >/dev/null
@@ -896,8 +811,7 @@ then
 			PLAYERCHAT=$(echo $CHATGREP | cut -d":" -f2- | tr -d \' | tr -d \")
 # Format the chat message to be written for the chat log
 			CHATMESSAGE="$(date '+%b_%d_%Y_%H.%M.%S') - \($PLAYERCHATID\)'$PLAYERCHAT'"  
-			as_user "echo $CHATMESSAGE >> $CHATLOG"
-			spam_prevention $PLAYERCHATID
+			as_user "echo $CHATMESSAGE >> $CHATLOG"	
 		fi
 	fi
 fi
@@ -910,15 +824,15 @@ if [[ ! $CHATGREP == *WARNING* ]] && [[ ! $CHATGREP == *object* ]]
 then
 #	echo $CHATGREP
 	COMMAND=$(echo $CHATGREP | cut -d" " -f4)
+	if [[ "$CHATGREP" =~ "[SERVER][CHAT][WISPER]" ]]
+	then
+		PLAYERCHATID=$(echo $CHATGREP | rev | cut -d"]" -f2 | rev | cut -d"[" -f2)
+	else
+		PLAYERCHATID=$(echo $CHATGREP | cut -d: -f1 | rev | cut -d" " -f1 | rev)
+	fi
 	if [[ "${COMMAND:0:1}" == "!" ]]
 	then
 #	echo $CHATGREP
-		if [[ "$CHATGREP" =~ "[SERVER][CHAT][WISPER]" ]]
-		then
-			PLAYERCHATID=$(echo $CHATGREP | rev | cut -d"]" -f2 | rev | cut -d"[" -f2)
-		else
-			PLAYERCHATID=$(echo $CHATGREP | cut -d: -f1 | rev | cut -d" " -f1 | rev)
-		fi
 #	echo "this is the playerchatid $PLAYERCHATID"
 # 				If the player does not have a log file, make one
 		if [ -e $PLAYERFILE/$PLAYERCHATID ]
@@ -928,8 +842,8 @@ then
 		else
 			log_playerinfo $PLAYERCHATID
 		fi
-# If the player does not have a bank account then add it and set it to zero
-# 				Grab the chat command itself by looking for ! and then cutting after that       
+
+#	Grab the chat command itself by looking for ! and then cutting after that       
 		CCOMMAND=( $(echo $CHATGREP | cut -d! -f2-) )
 #	echo "first command is ${CCOMMAND[0]} parameter 1 ${CCOMMAND[1]} parameter 2 ${CCOMMAND[2]} parameter 3 ${CCOMMAND[3]} "
 #				echo "Here is the command with variables ${CCOMMAND[@]}"
@@ -968,7 +882,13 @@ then
 #		echo Doesnt exist
 		as_user "screen -p 0 -S $SCREENID -X stuff $'/pm ${COMMANDANDPARAMETERS[1]} Unrecognized command. Please try again or use !HELP\n'"
 		fi
+	else
+#		If they didnt use a command, then run caps_prevention
+		caps_prevention $PLAYERCHATID $(echo $CHATGREP | cut -d" " -f4- | tr -d " ") &
 	fi
+#	run spam_prevention and swear_prevention if it was a valid chat message
+	spam_prevention $PLAYERCHATID &
+	swear_prevention $PLAYERCHATID $(echo $CHATGREP | cut -d" " -f4-) &
 fi
 }
 log_kill() {
@@ -1023,7 +943,7 @@ then
 # Write to the kill log who did the killing and who got killed
 		as_user "echo $PLAYERKILLER killed $PLAYERDEAD without predujice >> $KILLLOG"
 		as_user "sed -i 's/PlayerLastKilled: $LASTKILLED/PlayerLastKilled: $PLAYERDEAD/g' $PLAYERFILE/$PLAYERKILLER"
-		as_user "sed -i 's/PlayerKilledBy: .*/PlayerKilledBy $PLAYERKILLER $(date +%s)/g' $PLAYERFILE/$PLAYERDEAD"
+		as_user "sed -i 's/PlayerKilledBy: .*/PlayerKilledBy: $PLAYERKILLER $(date +%s)/g' $PLAYERFILE/$PLAYERDEAD"
 	else
 		as_user "echo $PLAYERDEAD was killed by AI ships >> $KILLLOG"
 	fi
@@ -1036,7 +956,6 @@ then
 else
 	as_user "echo $PLAYERDEAD was killed by an AI character >> $KILLLOG"
 fi
-as_user "sed -i 's/PlayerNeedsUpdating: .*/PlayerNeedsUpdating: Yes/g' $PLAYERFILE/$PLAYERDEAD"
 }
 log_admincommand() { 
 if [[ ! $@ == *org.schema.schine.network.server.AdminLocalClient* ]] && [[ ! $@ =~ "no slot free for" ]]
@@ -1049,7 +968,7 @@ fi
 log_shipbuy() { 
 SHIPBOUGHT=$(echo $@ | tr -d \( | tr -d \) | tr -d ";" )
 # Format the ship buying for he ship buy log
-WRITEBPIGHT="$SHIPBOUGHT on $(date '+%b_%d_%Y_%H.%M.%S') >> $SHIPBUYLOG"
+WRITEBPIGHT="echo $SHIPBOUGHT on $(date '+%b_%d_%Y_%H.%M.%S') >> $SHIPBUYLOG"
 as_user "$WRITEBPIGHT"
 }
 log_playerlogout() { 
@@ -1068,6 +987,7 @@ as_user "sed -i 's/PlayerLoggedIn: Yes/PlayerLoggedIn: No/g' $PLAYERFILE/$LOGOUT
 # Echo current string and array to the guestboot as a log off
 LOGOFF="$LOGOUTPLAYER logged off at $(date '+%b_%d_%Y_%H.%M.%S') server time"
 as_user "echo $LOGOFF >> $GUESTBOOK"
+as_user "sed -i '/$LOGOUTPLAYER/d' $ONLINELOG"
 }
 log_boarding() { 
 #echo "Boarding detected"
@@ -1077,11 +997,6 @@ PLAYEREXITING=$(echo $@ | cut -d\[ -f4 | cut -d\; -f1 | tr -d ' ')
 #Checks if the player file exists or if the player needs updating (after login and after death)
 if [[ ! -f $PLAYERFILE/$PLAYEREXITING ]]
 then
-	log_playerinfo $PLAYEREXITING
-fi
-if grep "PlayerNeedsUpdating: Yes" $PLAYERFILE/$PLAYEREXITING >/dev/null
-then
-	as_user "sed -i 's/PlayerNeedsUpdating: Yes/PlayerNeedsUpdating: No/g' $PLAYERFILE/$PLAYEREXITING"
 	log_playerinfo $PLAYEREXITING
 fi
 # This removes ship name from player.log and replace it with spacesuit when player is added back to Playercharacter             
@@ -1101,7 +1016,7 @@ then
 #	echo "This is the ship the player is exiting $SHIPEXITED"
 	IFS=$OLD_IFS
 # The current known sector the player is in
-	SHIPBOARDSECTOR=$(grep PlayerLocation $PLAYERFILE/$PLAYEREXITING | cut -d: -f2 | tr -d ' ')
+	SHIPBOARDSECTOR=$(grep PlayerLocation $PLAYERFILE/$PLAYEREXITING | cut -d= -f2 | tr -d ' ')
 #	echo "$PLAYEREXITING got out of $SHIPEXITED"
     OBJECTTYPEOLD=$(grep PlayerControllingType $PLAYERFILE/$PLAYEREXITING | cut -d: -f2 | tr -d ' ')
 # Change Playercontrollingobject to the current name of ship/player and 
@@ -1127,9 +1042,9 @@ then
 #	echo "This is the old ship the player controlling object $SBACTIVEOLDSHIP"
 	IFS=$OLD_IFS
 #	echo "$SHIPBOARDED is the ship being boarded"
-#         echo "$SBACTIVEOLDSHIP is the old ship player was in"
+#   echo "$SBACTIVEOLDSHIP is the old ship player was in"
 # Current last known player sector
-	SHIPBRDSC=$(grep PlayerLocation $PLAYERFILE/$PLAYEREXITING | cut -d: -f2 | tr -d ' ')
+	SHIPBRDSC=$(grep PlayerLocation $PLAYERFILE/$PLAYEREXITING | cut -d= -f2 | tr -d ' ')
 #	echo "This is the sector the boarding is taking place $SHIPBRDSC"
 # If the player is found in the player.log then write the new ship to it    
 #	echo "Changing character file to reflect new ship"
@@ -1140,7 +1055,7 @@ then
 	if [ ! -f $SHIPLOG ] 
 	then
 #		echo "no file"   
-		as_user "echo {$SHIPBOARDED} \[$PLAYEREXITING\] \($SHIPBRDSC\) >> $SHIPLOG" 
+		as_user "echo \{$SHIPBOARDED\} \[$PLAYEREXITING\] \($SHIPBRDSC\) >> $SHIPLOG" 
 	fi
 # If the ship log does exist 
 	if  [ -e $SHIPLOG ]
@@ -1151,14 +1066,14 @@ then
 #          	echo "ship found"
 # Placeholder       
 # Grab the old board as a variable             
-			OLDBOARDER=$(grep {$SHIPBOARDED} $SHIPLOG | cut -d\[ -f2 | cut -d\] -f1) 
+			OLDBOARDER=$(grep "{$SHIPBOARDED}" $SHIPLOG | cut -d\[ -f2 | cut -d\] -f1) 
 #			echo "The oldboarder is $OLDBOARDER"
-			as_user "sed -i 's/{$SHIPBOARDED} \[$OLDBOARDER\]/{$SHIPBOARDED} \[$PLAYEREXITING\]/g' $SHIPLOG"   
+			as_user "sed -i 's/{$SHIPBOARDED} \[$OLDBOARDER\]/{$SHIPBOARDED} \[$PLAYEREXITING\]/g' $SHIPLOG"
 			# If the ship log exists but no record of the ship write it to a new line on the log
 		else 
 #			echo "file found but no ship name, writing"
 # Write the new ship, boarder, and current sector to ship log
-			as_user "echo {$SHIPBOARDED} \[$PLAYEREXITING\] \($SHIPBRDSC\) >> $SHIPLOG"  
+			as_user "echo \{$SHIPBOARDED\} \[$PLAYEREXITING\] \($SHIPBRDSC\) >> $SHIPLOG"  
 # Write the new ship to the player log
 		fi
 	fi
@@ -1178,7 +1093,7 @@ then
 	IFS=$OLD_IFS
 #	echo "Space station boarded $STBOARDED"
 # Current last known player sector
-	STATIONBRDSC=$(grep PlayerLocation $PLAYERFILE/$PLAYEREXITING | cut -d: -f2 | tr -d ' ')
+	STATIONBRDSC=$(grep PlayerLocation $PLAYERFILE/$PLAYEREXITING | cut -d= -f2 | tr -d ' ')
 #	echo "This is the sector the station is in $STATIONBRDSC"
 	OBJECTTYPEOLD=$(grep PlayerControllingType $PLAYERFILE/$PLAYEREXITING | cut -d: -f2 | tr -d ' ')
 #	echo "This is the old object type the player was controlling $OBJECTTYPEOLD"
@@ -1199,22 +1114,23 @@ then
 	if [ ! -f $STATIONLOG ] 
 	then
 #		echo "no file"   
-		as_user "echo $STBOARDED \[$PLAYEREXITING\] \($STATIONBRDSC\) >> $STATIONLOG" 
+		as_user "echo \{$STBOARDED\} \[$PLAYEREXITING\] \($STATIONBRDSC\) >> $STATIONLOG" 
 	fi
 # If the station log does exist 
 	if  [ -e $STATIONLOG ]
 	then 
 # Check to see if station is already in station log      
-		if grep "$STBOARDED" $STATIONLOG >/dev/null
+		if grep "{$STBOARDED}" $STATIONLOG >/dev/null
 		then
 # Placeholder
 			STATIONFOUND=1
 #			echo "station already found"
+			as_user "sed -i 's/{$STBOARDED\} .*/$STBOARDED \[$PLAYEREXITING\] \($STATIONBRDSC\)/g' $STATIONLOG"
 # If the station log exists but no record of the ship write it to a new line on the log
 		else 
 #			echo "file found but no station name, writing"
 # Write the new ship, boarder, and current sector to ship log
-			as_user "echo $STBOARDED \[$PLAYEREXITING\] \($STATIONBRDSC\) >> $STATIONLOG"  
+			as_user "echo \{$STBOARDED\} \[$PLAYEREXITING\] \($STATIONBRDSC\) >> $STATIONLOG"  
 		fi
 	fi
 fi
@@ -1228,7 +1144,7 @@ then
 	PLANETBOARDED=$(echo $PLANETSTRING | cut -d\( -f7 | cut -d \) -f1)  
 	IFS=$OLD_IFS
 #	echo "Planet $PLANETBOARDED boarded"
-	PLANETCOORDS=$(grep PlayerLocation $PLAYERFILE/$PLAYEREXITING | cut -d: -f2 | tr -d ' ')
+	PLANETCOORDS=$(grep PlayerLocation $PLAYERFILE/$PLAYEREXITING | cut -d= -f2 | tr -d ' ')
 #	echo "These are the planets coords $PLANETCOORDS"
 	OBJECTTYPEOLD=$(grep PlayerControllingType $PLAYERFILE/$PLAYEREXITING | cut -d: -f2 | tr -d ' ')
 #	echo "This is the previous object type the player was controlling $OBJECTTYPEOLD"
@@ -1242,15 +1158,15 @@ then
 	if [ ! -f $PLANETLOG ] 
 	then
 #		echo "no file"   
-		as_user "echo $PLANETBOARDED \[$PLAYEREXITING\] \($PLANETCOORDS\) >> $PLANETLOG" 
+		as_user "echo \{$PLANETBOARDED\} \[$PLAYEREXITING\] \($PLANETCOORDS\) >> $PLANETLOG" 
 	fi
 	if [ -e $PLANETLOG ]
 	then
-		if grep "$$PLANETBOARDED" $PLANETLOG >/dev/null
+		if grep "{$PLANETBOARDED}" $PLANETLOG >/dev/null
 		then
-			as_user "sed -i 's/$PLANETBOARDED \[.*\] \(.*\)/$PLANETBOARDED \[$PLAYEREXITING\] \($PLANETCOORDS\)/g' $PLANETLOG"
+			as_user "sed -i 's/{$PLANETBOARDED\} \[.*\] \(.*\)/$PLANETBOARDED \[$PLAYEREXITING\] \($PLANETCOORDS\)/g' $PLANETLOG"
 		else
-			as_user "echo $PLANETBOARDED \[$PLAYEREXITING\] \($PLANETCOORDS\) >> $PLANETLOG"
+			as_user "echo \{$PLANETBOARDED\} \[$PLAYEREXITING\] \($PLANETCOORDS\) >> $PLANETLOG"
 		fi
 	fi
 fi
@@ -1277,10 +1193,11 @@ then
 #		echo "This is the new sector $PLAYERSCSOLOCHANGE"
 	# Find the last sector for the player from player.log
 		PLOLDSCOTYPE=$(grep PlayerControllingType $PLAYERFILE/$PLAYERSCSOLO | cut -d: -f2)
-		PLOLDSCCHANGE=$(grep PlayerLocation $PLAYERFILE/$PLAYERSCSOLO | cut -d: -f2 | tr -d ' ')
+		PLOLDSCCHANGE=$(grep PlayerLocation $PLAYERFILE/$PLAYERSCSOLO | cut -d= -f2 | tr -d ' ')
 #		echo "This was the last object player was in $PLOLDSCOTYPE"
-		as_user "sed -i 's/PlayerLocation: $PLOLDSCCHANGE/PlayerLocation: $PLAYERSCSOLOCHANGE/g' $PLAYERFILE/$PLAYERSCSOLO"
-		log_universeboarder $PLAYERSCSOLOCHANGE $PLAYERSCSOLO
+		as_user "sed -i 's/PlayerLocation=$PLOLDSCCHANGE/PlayerLocation=$PLAYERSCSOLOCHANGE/g' $PLAYERFILE/$PLAYERSCSOLO"
+		universeboarder $PLAYERSCSOLOCHANGE $PLAYERSCSOLO
+		customspawns $PLAYERSCSOLOCHANGE $PLAYERSCSOLO &
 	#----------------------------SHIP---------------------------------------------
 	# If there is a sector change with a ship
 	elif (echo "$SCCHNGTR" | grep Ship >/dev/null)
@@ -1302,16 +1219,17 @@ then
 	#	echo "This is the ship that is changing sectors $SHIPSC"
 		IFS=$OLD_IFS
 	# New sector changed to from the sector sting
-		OLDSHIPSC=$(grep "PlayerLocation" $PLAYERFILE/$PLAYERSCSHIP | cut -d: -f2 | tr -d ' ')
+		OLDSHIPSC=$(grep "PlayerLocation" $PLAYERFILE/$PLAYERSCSHIP | cut -d= -f2 | tr -d ' ')
 	#	echo "This is the old sector $OLDSHIPSC"
-		as_user "sed -i 's/PlayerLocation: $OLDSHIPSC/PlayerLocation: $PLAYERSCSHIPCHANGE/g' $PLAYERFILE/$PLAYERSCSHIP"
+		as_user "sed -i 's/PlayerLocation=$OLDSHIPSC/PlayerLocation=$PLAYERSCSHIPCHANGE/g' $PLAYERFILE/$PLAYERSCSHIP"
 		if (grep "{$SHIPSC}" $SHIPLOG >/dev/null)
 		then
 			as_user "sed -i 's/{$SHIPSC} .*/{$SHIPSC} \[$PLAYERSCSHIP\] \($PLAYERSCSHIPCHANGE\)/g' $SHIPLOG"
 		else
 			as_user "echo {$SHIPSC} \[$PLAYERSCSHIP\] \($PLAYERSCSHIPCHANGE\) >> $SHIPLOG" 
 		fi
-		log_universeboarder $PLAYERSCSHIPCHANGE $PLAYERSCSHIP
+		universeboarder $PLAYERSCSHIPCHANGE $PLAYERSCSHIP
+		customspawns $PLAYERSCSHIPCHANGE $PLAYERSCSHIP &
 	#----------------------------STATION---------------------------------------------
 	# If there is a sector change with a station
 	elif (echo "$SCCHNGTR" | grep SpaceStation >/dev/null)
@@ -1333,16 +1251,17 @@ then
 	#	echo "This is the station that is changing sectors $STATIONSC"
 		IFS=$OLD_IFS
 	# New sector changed to from the sector sting
-		OLDSTATIONSC=$(grep "PlayerLocation" $PLAYERFILE/$PLAYERSCSTATION | cut -d: -f2 | tr -d ' ')
+		OLDSTATIONSC=$(grep "PlayerLocation" $PLAYERFILE/$PLAYERSCSTATION | cut -d= -f2 | tr -d ' ')
 	#	echo "This is the old sector $OLDSTATIONSC"
-		as_user "sed -i 's/PlayerLocation: $OLDSTATIONSC/PlayerLocation: $PLAYERSCSTATIONCHANGE/g' $PLAYERFILE/$PLAYERSCSTATION"
+		as_user "sed -i 's/PlayerLocation=$OLDSTATIONSC/PlayerLocation=$PLAYERSCSTATIONCHANGE/g' $PLAYERFILE/$PLAYERSCSTATION"
 		if (grep "{$STATIONSC}" $STATIONLOG >/dev/null)
 		then
 			as_user "sed -i 's/{$STATIONSC} .*/{$STATIONSC} \[$PLAYERSCSTATION\] \($PLAYERSCSTATIONCHANGE\)/g' $STATIONLOG"
 		else
 			as_user "echo {$STATIONSC} \[$PLAYERSCSTATION\] \($PLAYERSCSTATIONCHANGE\) >> $STATIONLOG" 
 		fi
-		log_universeboarder $PLAYERSCSTATIONCHANGE $PLAYERSCSTATION
+		universeboarder $PLAYERSCSTATIONCHANGE $PLAYERSCSTATION
+		customspawns $PLAYERSCSTATIONCHANGE $PLAYERSCSTATION &
 	#----------------------------PLANET---------------------------------------------
 	# If there is a sector change with a planet
 	elif (echo "$SCCHNGTR" | grep Planet >/dev/null)
@@ -1364,16 +1283,17 @@ then
 	#	echo "This is the planet that is changing sectors $PLANETSC"
 		IFS=$OLD_IFS
 	# New sector changed to from the sector sting
-		OLDPLANETSC=$(grep "PlayerLocation" $PLAYERFILE/$PLAYERSCPLANET | cut -d: -f2 | tr -d ' ')
+		OLDPLANETSC=$(grep "PlayerLocation" $PLAYERFILE/$PLAYERSCPLANET | cut -d= -f2 | tr -d ' ')
 	#	echo "This is the old sector $OLDPLANETSC"
-		as_user "sed -i 's/PlayerLocation: $OLDPLANETSC/PlayerLocation: $PLAYERSCPLANETCHANGE/g' $PLAYERFILE/$PLAYERSCPLANET"
+		as_user "sed -i 's/PlayerLocation=$OLDPLANETSC/PlayerLocation=$PLAYERSCPLANETCHANGE/g' $PLAYERFILE/$PLAYERSCPLANET"
 		if (grep "{$PLANETSC}" $PLANETLOG >/dev/null)
 		then
 			as_user "sed -i 's/{$PLANETSC} .*/{$PLANETSC} \[$PLAYERSCPLANET\] \($PLAYERSCPLANETCHANGE\)/g' $PLANETLOG"
 		else
 			as_user "echo {$PLANETSC} \[$PLAYERSCPLANET\] \($PLAYERSCPLANETCHANGE\) >> $PLANETLOG" 
 		fi
-		log_universeboarder $PLAYERSCPLANETCHANGE $PLAYERSCPLANET
+		universeboarder $PLAYERSCPLANETCHANGE $PLAYERSCPLANET
+		customspawns $PLAYERSCPLANETCHANGE $PLAYERSCPLANET &
 	fi
 fi
 }
@@ -1381,6 +1301,18 @@ log_destroystring() {
 # Set the destroystr to the current array
 DESTROYSTR=$@
 # If the destroyed entity is a ship then
+if [ ! -f $SHIPLOG ]
+then
+	as_user "touch $SHIPLOG"
+fi
+if [ ! -f $STATIONLOG ]
+then
+	as_user "touch $STATIONLOG"
+fi
+if [ ! -f $GATELOG ]
+then
+	as_user "touch $GATELOG"
+fi
 if echo $DESTROYSTR | grep "SHIP" >/dev/null
 then
 #	echo "Ship destroyed"
@@ -1410,54 +1342,78 @@ then
 	as_user "sed -i '$REMOVEDESTATION' '$STATIONLOG'"
 	REMOVEDGATE="/LinkedEntity: ${DESSTATION}/d"
 	as_user "sed -i '$REMOVEDGATE' '$GATELOG'"
+	if grep -q "${DESSTATION}" $SECTORFILE
+	then
+		FACTION=$(grep "${DESSTATION}" $SECTORFILE | cut -d" " -f3)
+		SECTOR=$(grep "${DESSTATION}" $SECTORFILE | cut -d" " -f2)
+		as_user "sed -i '/.* ${DESSTATION}/d' $SECTORFILE"
+		as_user "sed -i 's/ $SECTOR//g' $FACTIONFILE/$FACTION"
+		as_user "sed -i '/^.*${SECTOR}.*/d' $PROTECTEDSECTORS"
+		sectoradjacent $FACTION
+		UNREADCOUNT=$(grep "UnreadMail" $MAILFILE/FAC@$FACTION | cut -d" " -f2)
+		as_user "sed -i 's/UnreadMail: $UNREADCOUNT/UnreadMail: $(($UNREADCOUNT + 1))/g' $MAILFILE/FAC@$FACTION"
+		CURRENTMAILID=$(grep "CurrentMailId:" $MAILFILE/FAC@$FACTION | cut -d" " -f4)
+		echo "MessageID: $CURRENTMAILID Unread: Yes Sender: GALACTICEBANK Time: $(date +%s) Message: Your beacon in sector $SECTOR has been destroyed by hostile forces." >> $MAILFILE/FAC@$FACTION
+		as_user "sed -i 's/CurrentMailId: $CURRENTMAILID/CurrentMailId: $(($CURRENTMAILID + 1))/g' $MAILFILE/FAC@$FACTION" 
+	fi
 fi
 }
 log_on_login() { 
 LOGINPLAYER=$(echo $@ | cut -d: -f2 | cut -d" " -f2)
 #echo "$LOGINPLAYER logged in"
-if [[ ! -f $PLAYERFILE/$LOGINPLAYER ]]
-then
-#	echo "File not found"
-	WRITEPLAYERFILE="cat > $PLAYERFILE/$LOGINPLAYER <<_EOF_
-Made on $(date)
-Rank: [$STARTINGRANK]
-CreditsInBank: 0
-VotingPoints: 0
-CurrentVotes: 0
-Bounty: 0
-WarpTeir: 1
-JumpDisabled: 0
-CommandConfirm: 0
-CurrentIP: 0.0.0.0
-CurrentCredits: 0
-PlayerFaction: None
-PlayerLocation: 2,2,2
-PlayerControllingType: PlayerCharacter
-PlayerControllingObject: Spacesuit
-PlayerLastLogin: 0
-PlayerLastCore: 0
-PlayerLastFold: 0
-PlayerLastUpdate: $(date +%s)
-PlayerLastKilled: None
-PlayerKilledBy: None
-PlayerLoggedIn: Yes
-PlayerNeedsUpdating: Yes
-ChatCount: 0
-SpamWarning: No
-SpamKicks: 0
-_EOF_"
-# echo "this is current user $USERNAME"
-as_user "$WRITEPLAYERFILE"
-else
-	as_user "sed -i 's/PlayerNeedsUpdating: No/PlayerNeedsUpdating: Yes/g' $PLAYERFILE/$LOGINPLAYER"
-	as_user "sed -i 's/ChatCount: .*/ChatCount: 0/g' $PLAYERFILE/$LOGINPLAYER"
-	as_user "sed -i 's/SpamWarning: .*/SpamWarning: No/g' $PLAYERFILE/$LOGINPLAYER"
-fi
-
+create_playerfile $LOGINPLAYER
+as_user "sed -i 's/JustLoggedIn: .*/JustLoggedIn: Yes/g' $PLAYERFILE/$LOGINPLAYER"
+as_user "sed -i 's/ChatCount: .*/ChatCount: 0/g' $PLAYERFILE/$LOGINPLAYER"
+as_user "sed -i 's/SpamWarning: .*/SpamWarning: No/g' $PLAYERFILE/$LOGINPLAYER"
+as_user "sed -i 's/SwearCount: .*/SwearCount: 0/g' $PLAYERFILE/$LOGINPLAYER"
+as_user "sed -i 's/CapsCount: .*/CapsCount: 0/g' $PLAYERFILE/$LOGINPLAYER"
+as_user "sed -i 's/PlayerLastLogin: .*/PlayerLastLogin: $(date)/g' $PLAYERFILE/$LOGINPLAYER"
 LOGON="$LOGINPLAYER logged on at $(date '+%b_%d_%Y_%H.%M.%S') server time"
 as_user "echo $LOGON >> $GUESTBOOK"
+as_user "echo $LOGINPLAYER >> $ONLINELOG"
 }
-log_universeboarder() { 
+log_initstring() {
+INITPLAYER=$(echo $@ | cut -d\[ -f3 | cut -d\; -f1 | tr -d " ")
+sleep 0.5
+log_playerinfo $INITPLAYER
+if [ -e $MAILFILE/$INITPLAYER ]
+then
+	UNREADCOUNT=$(grep "UnreadMail" $MAILFILE/$INITPLAYER | cut -d" " -f2)
+else
+	echo "UnreadMail: 1 CurrentMailId: 1" >> $MAILFILE/$INITPLAYER
+	echo "MessageID: 0 Unread: Yes Sender: MailBoxPro Time: $(date +%s) Message: Welcome to the mail box $INITPLAYER! Type !MAIL HELP to see how to use the mail box!" >> $MAILFILE/$INITPLAYER
+	UNREADCOUNT=1
+fi
+FACTION=$(grep "PlayerFaction" $PLAYERFILE/$INITPLAYER | cut -d= -f2)
+if [ -e $MAILFILE/FAC@$FACTION ]
+then
+	FACUNREADCOUNT=$(grep "UnreadMail" $MAILFILE/FAC@$FACTION | cut -d" " -f2)
+else
+	echo "UnreadMail: 1 CurrentMailId: 1" >> $MAILFILE/FAC@$FACTION
+	echo "MessageID: 0 Unread: Yes Sender: MailBoxPro Time: $(date +%s) Message: Welcome to the mail box faction $FACTION! Type !FMAIL HELP to see how to use the mail box!" >> $MAILFILE/FAC@$FACTION
+	FACUNREADCOUNT=1
+fi
+#checks if the player has any unread mail
+if [ $UNREADCOUNT -gt "0" ]
+then
+	as_user "screen -p 0 -S $SCREENID -X stuff $'/pm $INITPLAYER You have $UNREADCOUNT unread mail. Type !MAIL LIST Unread to see all unread mail.\n'"
+fi
+if [ $FACUNREADCOUNT -gt "0" ]
+then
+	as_user "screen -p 0 -S $SCREENID -X stuff $'/pm $INITPLAYER Your faction has $FACUNREADCOUNT unread mail. Type !FMAIL LIST Unread to see all unread mail.\n'"
+fi
+if grep -q "JustLoggedIn: Yes" $PLAYERFILE/$INITPLAYER 
+then
+	LOGINMESSAGE="Welcome to the server $INITPLAYER! Type !HELP for chat commands"
+	# A chat message that is displayed whenever a player logs in
+	as_user "screen -p 0 -S $SCREENID -X stuff $'/pm $INITPLAYER $LOGINMESSAGE\n'"
+	as_user "sed -i 's/JustLoggedIn: .*/JustLoggedIn: No/g' $PLAYERFILE/$INITPLAYER"
+fi
+}
+
+#------------------------------Game mechanics-----------------------------------------
+
+universeboarder() { 
 if [ "$UNIVERSEBOARDER" = "YES" ]
 then
 	XULIMIT=$(($(echo $UNIVERSECENTER | cut -d"," -f1) + $UNIVERSERADIUS))
@@ -1505,11 +1461,14 @@ then
 fi
 	
 }
-log_initstring() {
-INITPLAYER=$(echo $@ | cut -d\[ -f3 | cut -d\; -f1)
-LOGINMESSAGE="Welcome to the server $INITPLAYER! Type !HELP for chat commands"
-# A chat message that is displayed whenever a player logs in
-as_user "screen -p 0 -S $SCREENID -X stuff $'/pm $INITPLAYER $LOGINMESSAGE\n'"
+randomhelptips(){
+create_tipfile
+while [ -e /proc/$SM_LOG_PID ]
+do
+	RANDLINE=$(($RANDOM % $(wc -l < "$TIPFILE") + 1))
+	as_user "screen -p 0 -S $SCREENID -X stuff $'/chat $(sed -n ${RANDLINE}p $TIPFILE)\n'"
+	sleep $TIPINTERVAL
+done
 }
 spam_prevention(){
 if [ $SPAMPREVENTION = "Yes" ]
@@ -1556,6 +1515,134 @@ then
 	fi
 fi
 }
+swear_prevention(){
+if [ $SWEARPREVENTION = "Yes" ]
+then
+	create_barredwords
+#	Gets the chat message sent by the player
+	CHATMSG=${@:2}
+	SWEARMSG=0
+#	Counts how many swear words were sent by the player
+	for WORD in $CHATMSG
+	do
+#		i = ignore case w = match entire word
+		if grep -iqw -- $WORD $BARREDWORDS
+		then
+			let SWEARMSG++
+		fi
+	done
+#	If they sent any swear words then
+	if [ $SWEARMSG -gt 0 ]
+	then
+#		Gets the saved SwaerCount (how many swear words recently sent) and SwearKicks (how many kicks for swearing the player has had)
+		SWEARCOUNT=$(grep "SwearCount:" $PLAYERFILE/$1 | cut -d" " -f2)
+		SWEARKICKS=$(grep "SwearKicks:" $PLAYERFILE/$1 | cut -d" " -f2)
+#		If they have sworn less than the limit, then warn them
+		if [ $(($SWEARCOUNT + $SWEARMSG)) -lt $SWEARLIMIT ]
+		then
+			as_user "screen -p 0 -S $SCREENID -X stuff $'/pm $1 Please dont swear, it isnt pleasent for other players.\n'"
+			as_user "sed -i 's/SwearCount: .*/SwearCount: $(($SWEARCOUNT + $SWEARMSG))/g' $PLAYERFILE/$1"
+			sleep $SWEARTIMER
+			SWEARCOUNT=$(grep "SwearCount:" $PLAYERFILE/$1 | cut -d" " -f2)
+			if [ $SWEARCOUNT -ge $SWEARCOUNT ]
+			then
+				as_user "sed -i 's/SwearCount: .*/SwearCount: $(($SWEARCOUNT - $SWEARCOUNT))/g' $PLAYERFILE/$1"
+			fi
+#		If they have sworn up to the limit, warn them of a kick
+		elif [ $(($SWEARCOUNT + $SWEARMSG)) -eq $SWEARLIMIT ]
+		then
+			if [ $SWEARKICKS -lt $SWEARKICKLIMIT ]
+			then
+				as_user "screen -p 0 -S $SCREENID -X stuff $'/pm $1 Do not swear. You will be kicked if you do again.\n'"
+			else
+				as_user "screen -p 0 -S $SCREENID -X stuff $'/pm $1 Do not swear. You will be BANNED if you do again.\n'"
+			fi
+			as_user "sed -i 's/SwearCount: .*/SwearCount: $(($SWEARCOUNT + $SWEARMSG))/g' $PLAYERFILE/$1"
+			sleep $SWEARTIMER
+			SWEARCOUNT=$(grep "SwearCount:" $PLAYERFILE/$1 | cut -d" " -f2)
+			if [ $SWEARCOUNT -ge $SWEARCOUNT ]
+			then
+				as_user "sed -i 's/SwearCount: .*/SwearCount: $(($SWEARCOUNT - $SWEARCOUNT))/g' $PLAYERFILE/$1"
+			fi
+#		If they have sworn more than the limit then kick/ban them
+		elif [ $(($SWEARCOUNT + $SWEARMSG)) -gt $SWEARLIMIT ]
+		then
+#			If theyve been kicked too much, then ban
+			if [ $SWEARKICKS -lt $SWEARKICKLIMIT ]
+			then
+				as_user "screen -p 0 -S $SCREENID -X stuff $'/pm $1 Swearing will not be tolerated. You have been kicked.\n'"
+				as_user "sed -i 's/SwearKicks: .*/SwearKicks: $(($SWEARKICKS + 1))/g' $PLAYERFILE/$1"
+				sleep 0.1
+				as_user "screen -p 0 -S $SCREENID -X stuff $'/kick $1\n'"
+			else
+				as_user "screen -p 0 -S $SCREENID -X stuff $'/pm $1 Swearing will not be tolerated. You have been BANNED.\n'"
+				sleep 0.1
+				as_user "screen -p 0 -S $SCREENID -X stuff $'/ban_name $1\n'"
+				as_user "screen -p 0 -S $SCREENID -X stuff $'/kick $1\n'"
+			fi
+		fi
+	fi
+fi
+}
+caps_prevention(){
+if [ $SWEARPREVENTION = "Yes" ]
+then
+#	Get the message the player sent
+	CHATMSG=${@:2}
+#	The length of the message
+	CHATLENGTH=${#CHATMSG}
+#	The number of caps in the message
+	CAPSAMOUNT=$(echo $CHATMSG | grep -o [A-Z] | wc -l)
+#	If the message is more than 4 letters long (leniency)
+	if [ $CHATLENGTH -gt 4 ]
+	then
+#		If the % of caps is higher than the config limit then
+		if [ $((($CAPSAMOUNT * 100) / $CHATLENGTH)) -gt $CAPSPERCENT ]
+		then
+#			Get the number of excessive caps messages and kicks for caps
+			CAPSCOUNT=$(grep "CapsCount:" $PLAYERFILE/$1 | cut -d" " -f2)
+			CAPSKICK=$(grep "CapsKicks:" $PLAYERFILE/$1 | cut -d" " -f2)
+#			If they havent reached the limit, then warn them.
+			if [ $CAPSCOUNT -lt $CAPSLIMIT ]
+			then
+				as_user "sed -i 's/CapsCount: .*/CapsCount: $(($CAPSCOUNT + 1))/g' $PLAYERFILE/$1"
+				as_user "screen -p 0 -S $SCREENID -X stuff $'/pm $1 Please dont use caps lock.\n'"
+				sleep $CAPSTIMER
+				CAPSCOUNT=$(grep "CapsCount:" $PLAYERFILE/$1 | cut -d" " -f2)
+				as_user "sed -i 's/CapsCount: .*/CapsCount: $(($CAPSCOUNT - 1))/g' $PLAYERFILE/$1"
+#			If theyre at the limit, then warn them of a kick/ban
+			elif [ $CAPSCOUNT -eq $CAPSLIMIT ]
+			then
+				as_user "sed -i 's/CapsCount: .*/CapsCount: $(($CAPSCOUNT + 1))/g' $PLAYERFILE/$1"
+				if [ $CAPSKICK -lt $CAPSKICKLIMIT ]
+				then
+					as_user "screen -p 0 -S $SCREENID -X stuff $'/pm $1 If you continue to use caps lock then you will be kicked.\n'"
+				else
+					as_user "screen -p 0 -S $SCREENID -X stuff $'/pm $1 If you continue to use caps lock then you will be BANNED.\n'"
+				fi
+				sleep $CAPSTIMER
+				CAPSCOUNT=$(grep "CapsCount:" $PLAYERFILE/$1 | cut -d" " -f2)
+				as_user "sed -i 's/CapsCount: .*/CapsCount: $(($CAPSCOUNT - 1))/g' $PLAYERFILE/$1"
+#			If theyre above the limit, then kick/ban them
+			elif [ $CAPSCOUNT -gt $CAPSLIMIT ]
+			then
+				if [ $CAPSKICK -lt $CAPSKICKLIMIT ]
+				then
+					as_user "screen -p 0 -S $SCREENID -X stuff $'/pm $1 You have been kicked for excessive caps.\n'"
+					as_user "sed -i 's/CapsKicks: .*/CapsKicks: $(($CAPSKICK + 1))/g' $PLAYERFILE/$1"
+					sleep 0.1
+					as_user "screen -p 0 -S $SCREENID -X stuff $'/kick $1\n'"
+				else
+					as_user "screen -p 0 -S $SCREENID -X stuff $'/pm $1 You have been BANNED for excessive caps.\n'"
+					sleep 0.1
+					as_user "screen -p 0 -S $SCREENID -X stuff $'/ban_name $1\n'"
+					as_user "screen -p 0 -S $SCREENID -X stuff $'/kick $1\n'"
+				fi
+			fi
+		fi
+	fi
+fi
+}
 autovoteretrieval(){ 
 if [[ "$SERVERKEY" == "00000000000000000000" ]]
 then
@@ -1572,8 +1659,8 @@ else
 			do
 				PLAYER=$(echo $PLAYER | rev | cut -d"/" -f1 | rev )
 				TOTALVOTES=$(echo $ALLVOTES | tr " " "\n" | grep -A1 ">$PLAYER<" | tr "\n" " " | cut -d">" -f4 | cut -d"<" -f1)
-				VOTINGPOINTS=$(grep "VotingPoints:" $PLAYERFILE/$PLAYER | cut -d":" -f2 | tr -d " " )
-				CURRENTVOTES=$(grep "CurrentVotes:" $PLAYERFILE/$PLAYER | cut -d":" -f2 | tr -d " " )
+				VOTINGPOINTS=$(grep "VotingPoints=" $PLAYERFILE/$PLAYER | cut -d= -f2 | tr -d " " )
+				CURRENTVOTES=$(grep "CurrentVotes=" $PLAYERFILE/$PLAYER | cut -d= -f2 | tr -d " " )
 				if [[ ! -z "$TOTALVOTES" ]]
 				then
 					if [ $TOTALVOTES -ge $CURRENTVOTES ]
@@ -1583,8 +1670,8 @@ else
 						ADDVOTES=$TOTALVOTES
 					fi
 					VOTESSAVED=$(($VOTINGPOINTS+$ADDVOTES))
-					as_user "sed -i 's/VotingPoints: .*/VotingPoints: $VOTESSAVED/g' $PLAYERFILE/$PLAYER"
-					as_user "sed -i 's/CurrentVotes: .*/CurrentVotes: $TOTALVOTES/g' $PLAYERFILE/$PLAYER"
+					as_user "sed -i 's/VotingPoints=.*/VotingPoints=$VOTESSAVED/g' $PLAYERFILE/$PLAYER"
+					as_user "sed -i 's/CurrentVotes=.*/CurrentVotes=$TOTALVOTES/g' $PLAYERFILE/$PLAYER"
 					if [ $ADDVOTES -gt 0 ]
 					then
 						as_user "screen -p 0 -S $SCREENID -X stuff $'/chat $PLAYER just got $ADDVOTES point(s) for voting! You can get voting points too by going to starmade-servers.com!\n'"
@@ -1600,7 +1687,455 @@ function_exists(){
 declare -f -F $1 > /dev/null 2>&1
 FUNCTIONEXISTS=$?
 }
+customspawns(){
+if [ ! -f $PROTECTEDSECTORS ]
+then
+	echo "[2,2,2]" >> $PROTECTEDSECTORS
+fi
+if [ $CUSTOMSPAWNING = "Yes" ] && ! grep -qF -- "[$1]" $PROTECTEDSECTORS
+then
+#	Gets the players heat (spawn chance) and time of next allowed spawn
+	PLAYERHEAT=$(grep "PlayerHeat:" $PLAYERFILE/$2 | cut -d" " -f2)
+	PIRATECOOLDOWN=$(grep "PirateCooldown:" $PLAYERFILE/$2 | cut -d" " -f2)
+	NEWHEAT=$(($PLAYERHEAT + 1))
+#	Increments heat by 1
+	as_user "sed -i 's/PlayerHeat: .*/PlayerHeat: $NEWHEAT/g' $PLAYERFILE/$2"
+#	Generates a random number between 0 and 100. If that number is less than $SPAWNCHANCE then a pirate wave is spawned
+	RAND=$(($RANDOM % 100))
+	SPAWNCHANCE=$(($NEWHEAT * $NEWHEAT))
+#	Limits the chances of the spawning (otherwise it would reach 100% chance)
+	if [ $SPAWNCHANCE -gt $LIMITCHANCE ]
+	then
+		SPAWNCHANCE=$LIMITCHANCE
+	fi
+	if [ $RAND -le $SPAWNCHANCE ] && [ $(date +%s) -ge $PIRATECOOLDOWN ]
+	then
+#		Picks a random number of enemies to spawn
+		NUMOFSPAWNS=$((($RANDOM % $SPAWNLIMIT) + 1))
+		for SPAWNNO in $(eval echo {1..$NUMOFSPAWNS})
+		do
+#			Picks a random ship BP to spawn
+			SPAWNSHIP=$(($RANDOM % ${#PIRATENAMES[@]}))
+#			$(date +%s)$RANDOM gives each ship a unique name
+			as_user "screen -p 0 -S $SCREENID -X stuff $'/spawn_entity ${PIRATENAMES[$SPAWNSHIP]} MOB_CUSTOM_PIRATE_$(date +%s)$RANDOM $(echo $1 | tr "," " ") -1 True\n'"
+			sleep 0.1
+		done
+		as_user "screen -p 0 -S $SCREENID -X stuff $'/pm $2 $NUMOFSPAWNS pirates have locked onto you and warped in!\n'"
+#		Sets a delay on when the next spawn for that player can be
+		as_user "sed -i 's/PirateCooldown: .*/PirateCooldown: $(($(date +%s) + $PIRATECOOLTIMER))/g' $PLAYERFILE/$2"
+	fi
+#	Reduces the heat by 1 after 180s
+	sleep 180
+	PLAYERHEAT=$(grep "PlayerHeat:" $PLAYERFILE/$2 | cut -d" " -f2)
+	NEWHEAT=$(($PLAYERHEAT - 1))
+	as_user "sed -i 's/PlayerHeat: .*/PlayerHeat: $NEWHEAT/g' $PLAYERFILE/$2"
+fi
+}
+sectorincome(){
+while [ -e /proc/$SM_LOG_PID ]
+do 
+	if [ -f $SECTORFILE ]
+	then
+#		Loops over every line in the file i.e. every owned sector
+		while read SECTOR
+		do
+			SECTOR=($SECTOR)
+#			Works out the income value for that sector based on the number of adjacent sectors (/24 because it runs 24 times a day)
+			INCOME=$(echo "($BASEINCOME * (sqrt(${SECTOR[2]})+1))/24" | bc -l | cut -d"." -f1)
+#			Probably a bit overcomplicated, and not needed, but this basically cuts the income value down to 2SF so values are more rounded
+#			Removes all but the first 2 characters, then prints the character 0 as many times as characters it cut off and then joins that back together
+			INCOME=$(echo ${INCOME:0:-$((${#INCOME} -2))}$(printf "%0.s0" $(seq 1 $((${#INCOME} -2)))))
+#			Enforces the limit on the beacon
+			if [ $((${SECTOR[3]}+INCOME)) -le $BEACONCREDITLIMIT ]
+			then
+				SECTOR[3]=$((${SECTOR[3]}+INCOME))
+			else
+				SECTOR[3]=$BEACONCREDITLIMIT
+				FACTION=${SECTOR[1]}
+				UNREADCOUNT=$(grep "UnreadMail" $MAILFILE/FAC@$FACTION | cut -d" " -f2)
+				as_user "sed -i 's/UnreadMail: $UNREADCOUNT/UnreadMail: $(($UNREADCOUNT + 1))/g' $MAILFILE/FAC@$FACTION"
+				CURRENTMAILID=$(grep "CurrentMailId:" $MAILFILE/FAC@$FACTION | cut -d" " -f4)
+				echo "MessageID: $CURRENTMAILID Unread: Yes Sender: GALACTICEBANK Time: $(date +%s) Message: Your beacon in sector ${SECTOR[0]} is full of credits! All profits from here are now being lost!" >> $MAILFILE/FAC@$FACTION
+				as_user "sed -i 's/CurrentMailId: $CURRENTMAILID/CurrentMailId: $(($CURRENTMAILID + 1))/g' $MAILFILE/FAC@$FACTION" 
+			fi
+			as_user "sed -i 's/ ${SECTOR[0]} .*/ $(echo ${SECTOR[@]})/g' $SECTORFILE"
+#		Tells the while loop what file to read
+		done < $SECTORFILE
+#	Ensures it runs every hour
+	sleep 3600
+	fi
+done
+	
+}
+sectorfees(){
+while [ -e /proc/$SM_LOG_PID ]
+do 
+	for FACTION in $FACTIONFILE/*
+	do
+		FACTIONID=$(echo $FACTION | rev | cut -d"/" -f1 | rev)
+		OWNEDSECTORS=($(grep "OwnedSectors=" $FACTION | cut -d"=" -f2-))
+		FACTIONCREDITS=$(grep "CreditsInBank=" $FACTION | cut -d= -f2)
+		FEES=$(echo "(${#OWNEDSECTORS[@]}*$DAILYFEES)/24" | bc -l | cut -d"." -f1)
+		FACTIONCREDITS=$(($FACTIONCREDITS-$FEES))
+		if [ $FACTIONCREDITS -lt 0 ] && [ $(($FACTIONCREDITS+$FEES)) -gt 0 ] && [ $FEES -gt 0 ]
+		then
+			UNREADCOUNT=$(grep "UnreadMail" $MAILFILE/FAC@$FACTIONID | cut -d" " -f2)
+			as_user "sed -i 's/UnreadMail: $UNREADCOUNT/UnreadMail: $(($UNREADCOUNT + 1))/g' $MAILFILE/FAC@$FACTIONID"
+			CURRENTMAILID=$(grep "CurrentMailId:" $MAILFILE/FAC@$FACTIONID | cut -d" " -f4)
+			echo "MessageID: $CURRENTMAILID Unread: Yes Sender: GALACTICEBANK Time: $(date +%s) Message: Your faction has run out of credits! You have 48 hours to pay off your debt or you will lose your sectors, 1 sector every hour!" >> $MAILFILE/FAC@$FACTIONID
+			as_user "sed -i 's/CurrentMailId: $CURRENTMAILID/CurrentMailId: $(($CURRENTMAILID + 1))/g' $MAILFILE/FAC@$FACTIONID" 
+		elif [ $FACTIONCREDITS -lt $((-$FEES*48)) ] && [ $FEES -gt 0 ]
+		then
+			SECTOR=${OWNEDSECTORS[0]}
+			BEACONNAME=$(grep -- " $SECTOR " $SECTORFILE | cut -d" " -f6)
+			as_user "sed -i '/ $SECTOR .*/d' $SECTORFILE"
+			as_user "sed -i 's/ $SECTOR//g' $FACTION"
+			as_user "sed -i '/[$SECTOR]/d' $PROTECTEDSECTORS"
+			UNREADCOUNT=$(grep "UnreadMail" $MAILFILE/FAC@$FACTIONID | cut -d" " -f2)
+			as_user "sed -i 's/UnreadMail: $UNREADCOUNT/UnreadMail: $(($UNREADCOUNT + 1))/g' $MAILFILE/FAC@$FACTIONID"
+			CURRENTMAILID=$(grep "CurrentMailId:" $MAILFILE/FAC@$FACTIONID | cut -d" " -f4)
+			echo "MessageID: $CURRENTMAILID Unread: Yes Sender: GALACTICEBANK Time: $(date +%s) Message: Your beacon in sector $SECTOR has been deactivated as repayment for your debt." >> $MAILFILE/FAC@$FACTIONID
+			as_user "sed -i 's/CurrentMailId: $CURRENTMAILID/CurrentMailId: $(($CURRENTMAILID + 1))/g' $MAILFILE/FAC@$FACTIONID"
+			as_user "screen -p 0 -S $SCREENID -X stuff $'/despawn_all $BEACONNAME unused false\n'"
+			sectoradjacent $FACTIONID
+		fi
+		as_user "sed -i 's/CreditsInBank=.*/CreditsInBank=$FACTIONCREDITS/g' $FACTION"
+	done
+sleep 3600
+done
+}
+sectoradjacent(){
+FACTIONSECTORS=$(grep "OwnedSectors=" $FACTIONFILE/$1 | cut -d= -f2-)
+for SECTOR in $FACTIONSECTORS
+do
+	XCOORD=$(echo $SECTOR | cut -d"," -f1)
+	YCOORD=$(echo $SECTOR | cut -d"," -f2)
+	ZCOORD=$(echo $SECTOR | cut -d"," -f3)
+	NEIGHBOURSECTORS=0
+	for XRANGE in $(($XCOORD -1)) $(($XCOORD +1))
+	do
+		if $(echo "$FACTIONSECTORS" | grep -q -- "$XRANGE,$YCOORD,$ZCOORD")
+		then
+			let NEIGHBOURSECTORS++
+		fi
+	done
+	for YRANGE in $(($YCOORD -1)) $(($YCOORD +1))
+	do
+		if $(echo "$FACTIONSECTORS" | grep -q -- "$XCOORD,$YRANGE,$ZCOORD")
+		then
+			let NEIGHBOURSECTORS++
+		fi
+	done
+	for ZRANGE in $(($ZCOORD -1)) $(($ZCOORD +1))
+	do
+		if $(echo "$FACTIONSECTORS" | grep -q -- "$XCOORD,$YCOORD,$ZRANGE")
+		then
+			let NEIGHBOURSECTORS++
+		fi
+	done
+	SECTORDATA=($(grep -- $SECTOR $SECTORFILE))
+	SECTORDATA[2]=$NEIGHBOURSECTORS
+	as_user "sed -i 's/ $SECTOR .*/ $(echo ${SECTORDATA[@]})/g' $SECTORFILE"
+done
+}
 
+#---------------------------Files Daemon Writes and Updates---------------------------------------------
+
+write_factionfile() { #Must update how all these variables for grep and sed due to = change. Parameter of Faction must be passed
+CREATEFACTION="cat > $FACTIONFILE/$1 <<_EOF_
+CreditsInBank=0
+OwnedSectors=0
+TrespassMessage=0
+TaxPercent=0
+_EOF_"
+as_user "$CREATEFACTION"
+}
+write_barredwords() {
+CREATEBARRED="cat > $BARREDWORDS <<_EOF_
+fuck
+shit
+crap
+dick
+ffs
+asshole
+_EOF_"
+as_user "$CREATEBARRED"
+}
+write_configpath() {
+CONFIGCREATE="cat > $CONFIGPATH <<_EOF_
+#  Settings below can all be custom tailored to any setup.
+#  Username is your user on the server that runs starmade
+#  Backupname is the name you want your backup file to have
+#  Service is the name of your Starmade jar file 
+#  Backup is the path you want to move you backups to
+#  Starterpath is where you starter file is located.  Starmade folder will be located in this directory
+#  Maxmemory controls the total amount Java can use.  It is the -xmx variable in Java
+#  Minmemory is the inital amounr of memory to use.  It is the -xms variable in Java
+#  Port is the port that Starmade will use.  Set to 4242 by default.
+#  Logging is for turning on or off with a YES or a NO
+#  Daemon Path is only used if you are going to screen log
+#  Server key is for the rewards and voting function and is setup for http://starmade-servers.com/
+HASH=$CURRENTHASH
+SERVICE='StarMade.jar' #The name of the .jar file to be run
+USERNAME="$USERNAME" #Your login name
+BACKUP='/home/$USERNAME/starbackup' #The location where all backups created are saved
+BACKUPNAME='Star_Backup_' #Name of the backups
+MAXMEMORY=512m #Java setting. Max memory assigned to the server
+MINMEMORY=256m #Java setting. Min memory assigned to the server
+PORT=4242 #The port the server will run on
+SCREENID=smserver #Name of the screen the server will be run on
+SCREENLOG=smlog #Name of the screen logging will be run on
+LOGGING=YES #Determines if logging will be active (YES/NO))
+SERVERKEY="00000000000000000000" #Server key found at starmade-servers.com (used for voting rewards)
+#------------------------Logging files----------------------------------------------------------------------------
+RANKCOMMANDS=$STARTERPATH/logs/rankcommands.log #The file that contains all the commands each rank is allowed to use
+SHIPLOG=$STARTERPATH/logs/ship.log #The file that contains a record of all the ships with their sector location and the last person who entered it
+CHATLOG=$STARTERPATH/logs/chat.log #The file that contains a record of all chat messages sent
+BOUNTYLOG=$STARTERPATH/logs/bounty.log #The file that contains all bounty records
+GATELOG=$STARTERPATH/logs/gates.log #The file that contains all the jump gates and their details
+PLAYERFILE=$STARTERPATH/playerfiles #The directory that contains all the individual player files which store player information
+MAILFILE=$STARTERPATH/mail #The directory that contains all player mail
+GATEWHITELIST=$STARTERPATH/gatewhitelist #The directory that contains all the individual player files which store who is allowed to access their jump gates
+KILLLOG=$STARTERPATH/logs/kill.log #The file with a record of all deaths on the server
+ADMINLOG=$STARTERPATH/logs/admin.log #The file with a record of all admin commands issued
+GUESTBOOK=$STARTERPATH/logs/guestbook.log #The file with a record of all the logouts on the server
+STATIONLOG=$STARTERPATH/logs/station.log #The file that contains all of the stations on the server
+PLANETLOG=$STARTERPATH/logs/planet.log #The file that contains all of the planets on the server
+SHIPBUYLOG=$STARTERPATH/logs/shipbuy.log #The file that contains all the ships spawned on the server
+BANKLOG=$STARTERPATH/logs/bank.log #The file that contains all transactions made on the server
+ONLINELOG=$STARTERPATH/logs/online.log #The file that contains the list of currently online players
+TIPFILE=$STARTERPATH/logs/tips.txt #The file that contains random tips that will be told to players
+FACTIONFILE=$STARTERPATH/factionfiles #The folder that contains individual faction files
+BARREDWORDS=$STARTERPATH/logs/barredwords.log #The file that contains all blocked words (for use with SwearPrevention)
+SECTORFILE=$STARTERPATH/logs/sectordata.log #The file that contains a list of all owned sectors, and their stats
+PROTECTEDSECTORS=$STARTERPATH/logs/protected.log #Contains a list of all protected sectors (only works with custom spawning)
+#-------------------------Chat Settings-------------------------------------------------------------------
+SPAMPREVENTION=Yes # Turns on or off the SpamPrevention system (Yes/No)
+SPAMLIMIT=5 # The number of messages that can be sent within the $SPAMTIMER before a player will be warned
+SPAMTIMER=10 # The time taken for the message counter to reduce by one after sending a chat message
+SPAMALLOWANCE=2 # The number of messages allowed between receiving the warning and being kicked
+SPAMKICKLIMIT=2 # The number of kicks from the server before the player is banned (Set to really high to turn off)
+SWEARPREVENTION=Yes # Turns on or off the SwearPrevention system (Yes/No)
+SWEARLIMIT=2 # The number of swear words allowed within $SWEARTIMER seconds
+SWEARTIMER=60 # The time taken for the swear counter to reduce by one after swearing
+SWEARKICKLIMIT=2 # The number of kicks from the server before the player is banned (Set to really high to turn off)
+CAPSPREVENTION=Yes # Turns on or off the CapsPrevention system (Yes/No)
+CAPSLIMIT=5 # The number of messages that can be sent that exceed the $CAPSPERCENT limit
+CAPSTIMER=10 # The time taken for the caps counter to reduce by one after sending a message with too many caps
+CAPSKICKLIMIT=4 # The number of kicks a player can recieve for Caps before theyre banned
+CAPSPERCENT=30 # The percentage of letters in a chat message that can be caps
+#-------------------------Custom Spawns-------------------------------------------------------------------
+CUSTOMSPAWNING=Yes #Determines if the server will use a custom spawning method, utilising player movement
+PIRATENAMES=('Isanth-VI') #The blueprint names of all pirate ships on the server
+LIMITCHANCE=50 #The % chance of pirates spawning per sector change at maximum
+SPAWNLIMIT=9 #The maximum number of pirates inside a wave
+PIRATECOOLTIMER=300 #The minimum time in seconds between each spawn
+#-------------------------Sector ownership-------------------------------------------------------------------
+BEACONNAME='Beacon' #The blueprint name of the sector beacon station (select a station and use /save)
+SECTORCOST=10000000 #The base cost to buy a sector (0 boardering sectors equals 100% cost, 6 boardering sectors equals 50% cost)
+DAILYFEES=700000 #The amount of money a player has to pay each day to maintain the sectors (intentionally larger than baseincome)
+BASEINCOME=500000 #The base amount of income from a sector per day (0 boardering sectors equals baseincome, 6 boardering sectors equals baseincome x 4)
+BEACONCREDITLIMIT=10000000 #The limit of credits each beacon can store
+SECTORREFUND=90 #The percentage of credits back from selling a sector
+#------------------------Game settings----------------------------------------------------------------------------
+GATECOST=50 #Number of voting points needed to spawn a gate
+#Gate level stats. GATETEIR[LEVEL]equals\"vote-cost warm-up-time cool-down-time\" Can be expanded following the same format infinitely
+GATETEIR[1]=\"0 15 180\"
+GATETEIR[2]=\"2 13 160\"
+GATETEIR[3]=\"3 11 140\"
+GATETEIR[4]=\"5 9 120\"
+GATETEIR[5]=\"8 7 110\"
+GATETEIR[6]=\"10 5 90\"
+GATETEIR[7]=\"15 5 80\"
+GATETEIR[8]=\"20 5 70\"
+GATETEIR[9]=\"30 5 60\"
+GATEREFUND=90 #percentage of the cost of the gate that players get back
+VOTECHECKDELAY=10 #The time in seconds between each check of starmade-servers.org
+CREDITSPERVOTE=1000000 # The number of credits a player gets per voting point.
+FOLDLIMIT=900 #Due to the way bash square roots numbers, this is the square of the distance limit to be more accurate with distances
+UNIVERSEBOARDER=YES #Turn on and off the universe boarder (YES/NO)
+UNIVERSECENTER=\"2,2,2\" #Set the center of the universe boarder
+UNIVERSERADIUS=50 #Set the radius of the universe boarder around 
+TIPINTERVAL=600 #Number of seconds between each tip being shown
+STARTINGRANK=Ensign #The initial rank players recieve when they log in for the first time. Can be edited.
+_EOF_"
+as_user "$CONFIGCREATE"
+}
+write_playerfile() { #Must update how all these variables for grep and sed due to = change.  Parameter of Player must be passed
+PLAYERCREATE="cat > $PLAYERFILE/$1 <<_EOF_
+Rank: [$STARTINGRANK]
+CreditsInBank=0
+VotingPoints=0
+CurrentVotes=0
+Bounty=0
+WarpTeir=1
+JumpDisabled=0
+CommandConfirm=0
+CurrentIP=0.0.0.0
+CurrentCredits=0
+PlayerFaction=None
+PlayerLocation=2,2,2
+PlayerControllingType=Spacesuit
+PlayerControllingObject=PlayerCharacter
+PlayerLastLogin=0
+PlayerLastCore=0
+PlayerLastFold=0
+PlayerLastUpdate=0
+PlayerLastKilled=None
+PlayerKilledBy=None
+PlayerLoggedIn=No
+ChatCount=0
+SpamWarning=No
+SpamKicks=0
+SwearCount=0
+SwearKicks=0
+CapsCount=0
+CapsKicks=0
+JustLoggedIn=No
+PlayerHeat=0
+PirateCooldown=0
+_EOF_"
+as_user "$PLAYERCREATE"
+}
+write_rankcommands() {
+CREATERANK="cat > $RANKCOMMANDS <<_EOF_
+Ensign MAIL POSTBOUNTY LISTBOUNTY COLLECTBOUNTY FOLD ADDJUMP JUMPLIST JUMP UPGRADEJUMP DESTROYJUMP DEPOSIT WITHDRAW TRANSFER BALANCE RANKME RANKLIST RANKCOMMAND PLAYERWHITELIST VOTEBALANCE HELP CORE SEARCH CLEAR LISTWHITE GIVEHARD GIVENORMAL GIVE TELEPORT PROTECT UNPROTECT SPAWNSTOP SPAWNSTART
+Lieutenant MAIL POSTBOUNTY LISTBOUNTY COLLECTBOUNTY FOLD ADDJUMP JUMPLIST JUMP UPGRADEJUMP DESTROYJUMP DEPOSIT WITHDRAW TRANSFER BALANCE RANKME RANKLIST RANKCOMMAND PLAYERWHITELIST VOTEBALANCE HELP CORE SEARCH CLEAR LISTWHITE WHITEADD KICK
+Commander MAIL POSTBOUNTY LISTBOUNTY COLLECTBOUNTY FOLD ADDJUMP JUMPLIST JUMP UPGRADEJUMP DESTROYJUMP DEPOSIT WITHDRAW TRANSFER BALANCE RANKME RANKLIST RANKCOMMAND PLAYERWHITELIST VOTEBALANCE HELP CORE SEARCH CLEAR LISTWHITE WHITEADD KICK BANPLAYER UNBAN
+Captain MAIL POSTBOUNTY LISTBOUNTY COLLECTBOUNTY FOLD ADDJUMP JUMPLIST JUMP UPGRADEJUMP DESTROYJUMP DEPOSIT WITHDRAW TRANSFER BALANCE RANKME RANKLIST RANKCOMMAND PLAYERWHITELIST VOTEBALANCE HELP CORE SEARCH CLEAR LISTWHITE WHITEADD KICK BANPLAYER UNBAN RESTART DESPAWN KILL BANHAMMER TELEPORT PROTECT UNPROTECT SPAWNSTOP SPAWNSTART
+Admiral MAIL POSTBOUNTY LISTBOUNTY COLLECTBOUNTY FOLD ADDJUMP JUMPLIST JUMP UPGRADEJUMP DESTROYJUMP DEPOSIT WITHDRAW TRANSFER BALANCE RANKME RANKLIST RANKCOMMAND PLAYERWHITELIST VOTEBALANCE HELP CORE SEARCH CLEAR LISTWHITE MAILALL ADMINADDJUMP ADMINDELETEJUMP RANKSET RANKUSER BANHAMMER KILL WHITEADD BANPLAYER UNBAN SHUTDOWN RESTART CREDITS IMPORT EXPORT DESPAWN LOADSHIP GIVE GIVENORMALGIVEHARD KICK GODON GODOFF INVISION INVISIOFF TELEPORT PROTECT UNPROTECT SPAWNSTOP SPAWNSTART MYDETAILS ADMINCOOLDOWN ADMINREADFILE THREADDUMP GIVESET GIVEMETA
+Admin -ALL-
+_EOF_"
+as_user "$CREATERANK"
+}
+write_tipfile() {
+CREATETIP="cat > $TIPFILE <<_EOF_
+!HELP is your friend! If you are stuck on a command, use !HELP <Command>
+Want to get from place to place quickly? Try !FOLD
+Ever wanted to be rewarded for voting for the server? Vote now at starmade-servers.org to get voting points!
+Been voting a lot lately? You can spend your voting points on a Jump Gate! Try !ADDJUMP 
+Want to reward people for killing your arch enemy? Try !POSTBOUNTY
+Fancy becoming a bounty hunter? Use !LISTBOUNTY to see all bounties
+Killed someone with a bounty recently? Try using !COLLECTBOUNTY
+Got too much money? Store some in your bank account with !DEPOSIT
+Need to get some money? Take some out of your bank account with !WITHDRAW
+Stuck in the middle of nowhere but dont want to suicide? Try !CORE
+Want to tell your friend youve found something but theyre offline? Try !MAIL SEND
+Logged in and you have an unread message? Try !MAIL LIST Unread
+Want to secretly use a command? Try using a command inside a PM to yourself!
+_EOF_"
+as_user "$CREATETIP"
+}
+create_tipfile(){
+if [ ! -e $TIPFILE ]
+then
+	write_tipfile
+fi
+}
+create_playerfile(){
+if [[ ! -f $PLAYERFILE/$1 ]]
+then
+#	echo "File not found"
+	write_playerfile $1
+fi
+}
+create_factionfile(){
+if [[ ! -f $FACTIONFILE/$1 ]]
+then
+#	echo "File not found"
+	write_factionfile $1
+fi
+}
+create_rankscommands(){
+if [ ! -e $RANKCOMMANDS ]
+then
+	write_rankcommands
+fi
+}
+create_barredwords(){
+if [ ! -e $BARREDWORDS ]
+then
+	write_barredwords
+fi
+}
+update_file() {
+#echo "Starting Update"
+#echo "$2 is the write function to update the old config filename"
+#echo "$3 is the name of the specific file for functions like playerfile or factionfile"
+# Grab first occurrence of value from the Daemon file itself to be used to determine correct path
+DLINE=$(grep -n -m 1 $2 $DAEMONPATH | cut -d : -f 1)
+#echo "This is the starting line for the write function $DLINE"
+let DLINE++
+EXTRACT=$(sed -n "${DLINE}p" $DAEMONPATH)
+#echo "Here is the second line of write funtion $EXTRACT"
+if [ "$#" -eq "3" ]
+then
+	PATHUPDATEFILE=$(echo $EXTRACT | cut -d$ -f2- | cut -d/  -f1)
+#	echo "Extraction from Daemon $PATHUPDATEFILE"
+	PATHUPDATEFILE=${!PATHUPDATEFILE}/$3
+#	echo "modified directory $PATHUPDATEFILE"
+else
+	PATHUPDATEFILE=$(echo $EXTRACT | cut -d$ -f2- | cut -d" " -f1)
+#	echo "This is what was extracted from the Daemon $PATHUPDATEFILE"
+# Set the path to what the source of the config file value is
+	PATHUPDATEFILE=${!PATHUPDATEFILE}
+	cp $PATHUPDATEFILE $PATHUPDATEFILE.old
+fi
+#echo "This is the actual path to the file to be updated $PATHUPDATEFILE"
+#This is how you would compare files for future work ARRAY=( $(grep -n -Fxvf test1 test2) )
+OLD_IFS=$IFS
+IFS=$'\n'
+# Create an array of the old file
+OLDFILESTRING=( $(cat $PATHUPDATEFILE) )
+as_user "rm $PATHUPDATEFILE"
+# $2 is the write file function for the file being updated and if $3 is set it will use specific file
+$2 $3
+# Put the newly written file into an array
+NEWFILESTRING=( $(cat $PATHUPDATEFILE) )
+IFS=$OLD_IFS
+NEWARRAY=0
+as_user "rm $PATHUPDATEFILE"
+# The following rewrites the config file and preserves values from the old configuration file 
+while [ -n "${NEWFILESTRING[$NEWARRAY]+set}" ]
+do
+	NEWSTR=${NEWFILESTRING[$NEWARRAY]}
+	OLDARRAY=0
+	while [ -n "${OLDFILESTRING[$OLDARRAY]+set}" ]
+	do
+# If a = is detected grab the value to the right of = and then overwrite the new value
+	if [[ $NEWSTR == *=* ]]
+	then
+		NEWVAR=${NEWSTR%=*}
+		NEWVAL=${NEWSTR##*=}
+		OLDSTR=${OLDFILESTRING[$OLDARRAY]}
+		OLDVAR=${OLDSTR%=*}
+		OLDVAL=${OLDSTR##*=}
+		if [ "$OLDVAR" = "$NEWVAR" ]
+		then
+			WRITESTRING=${NEWSTR/$NEWVAL/$OLDVAL} 
+			break
+		fi
+	else
+		WRITESTRING=$NEWSTR
+	fi
+	let OLDARRAY++
+	done
+#	echo "$WRITESTRING"
+	cat <<EOF >> $PATHUPDATEFILE
+$WRITESTRING
+EOF
+let NEWARRAY++
+done
+}
+update_daemon() {
+update_file write_configpath
+update_file write_barredwords
+update_file write_tipfile
+update_file write_rankcommands
+
+
+# Update the Hash here
+}
 #Example Command
 #In the command system, $1 = Playername , $2 = parameter 1 , $3 = parameter 2 , ect
 #e.g if Titansmasher types "!FOLD 9 8 7" then $1 = Titansmasher , $2 = 9 , $3 = 8 , $4 = 7
@@ -1616,6 +2151,217 @@ FUNCTIONEXISTS=$?
 #}
 #Mail Commands
 
+#Sector Ownership Commands
+function COMMAND_BUYSECTOR(){
+#Purchases a sector for a set price, determined by how many sectors adjacent to it you own. The more sectors = cheaper
+#USAGE: !BUYSECTOR
+if [ "$#" -ne 1 ]
+then
+	as_user "screen -p 0 -S $SCREENID -X stuff $'/pm $1 Invalid parameters. Please use !BUYSECTOR\n'"
+else
+	as_user "screen -p 0 -S $SCREENID -X stuff $'/pm $1 GALACTICE BANK - Connecting to servers\n'"
+	log_playerinfo $1
+	FACTION=$(grep "PlayerFaction=" $PLAYERFILE/$1 | cut -d= -f2)
+	if [ ! $FACTION = "None" ]
+	then
+		create_factionfile $FACTION
+		FACTIONCREDITS=$(grep "CreditsInBank" $FACTIONFILE/$FACTION | cut -d= -f2)
+		FACTIONSECTORS=$(grep "OwnedSectors" $FACTIONFILE/$FACTION | cut -d= -f2-)
+		PLAYERSECTOR=$(grep "PlayerLocation" $PLAYERFILE/$1 | cut -d= -f2)
+		if [ ! -f $SECTORFILE ]
+		then
+			as_user "touch $SECTORFILE"
+		fi
+		if ! grep " $PLAYERSECTOR " $SECTORFILE
+		then
+			XCOORD=$(echo $PLAYERSECTOR | cut -d"," -f1)
+			YCOORD=$(echo $PLAYERSECTOR | cut -d"," -f2)
+			ZCOORD=$(echo $PLAYERSECTOR | cut -d"," -f3)
+			NEIGHBOURSECTORS=0
+			for XRANGE in $(($XCOORD -1)) $(($XCOORD +1))
+			do
+				if $(echo "$FACTIONSECTORS" | grep -q -- "$XRANGE,$YCOORD,$ZCOORD")
+				then
+					let NEIGHBOURSECTORS++
+				fi
+			done
+			for YRANGE in $(($YCOORD -1)) $(($YCOORD +1))
+			do
+				if $(echo "$FACTIONSECTORS" | grep -q -- "$XCOORD,$YRANGE,$ZCOORD")
+				then
+					let NEIGHBOURSECTORS++
+				fi
+			done
+			for ZRANGE in $(($ZCOORD -1)) $(($ZCOORD +1))
+			do
+				if $(echo "$FACTIONSECTORS" | grep -q -- "$XCOORD,$YCOORD,$ZRANGE")
+				then
+					let NEIGHBOURSECTORS++
+				fi
+			done
+			THISSECTORCOST=$(echo "$SECTORCOST/(sqrt($NEIGHBOURSECTORS/6)+1)" | bc -l | cut -d"." -f1)
+			if [ $FACTIONCREDITS -ge $THISSECTORCOST ]
+			then
+				FACTIONCREDITS=$(($FACTIONCREDITS - $THISSECTORCOST))
+				BEACONID="Sector_Claim_Unit_F:${FACTION}_ID:$(date +%s)$RANDOM"
+				as_user "screen -p 0 -S $SCREENID -X stuff $'/pm $1 GALACTICE BANK - Due to the $NEIGHBOURSECTORS adjacent sectors you own, this sector costs $THISSECTORCOST credits\n'"
+				as_user "sed -i 's/CreditsInBank=.*/CreditsInBank=$FACTIONCREDITS/g' $FACTIONFILE/$FACTION"
+				as_user "sed -i 's/OwnedSectors=.*/OwnedSectors=$FACTIONSECTORS $PLAYERSECTOR/g' $FACTIONFILE/$FACTION"
+				echo " $PLAYERSECTOR $FACTION $NEIGHBOURSECTORS 0 $BEACONID $THISSECTORCOST" >> $SECTORFILE
+				echo "[$PLAYERSECTOR]" >> $PROTECTEDSECTORS
+				sleep 0.2
+				as_user "screen -p 0 -S $SCREENID -X stuff $'/pm $1 GALACTICE BANK - A sectoral claim unit has been deployed to your sector. If this is estroyed, then the sector claim is lost!\n'"
+				as_user "screen -p 0 -S $SCREENID -X stuff $'/spawn_entity $BEACONNAME $BEACONID $(echo $PLAYERSECTOR | tr "," " ") 0 False \n'"
+				sectoradjacent $FACTION
+				UNREADCOUNT=$(grep "UnreadMail" $MAILFILE/FAC@$FACTION | cut -d" " -f2)
+				as_user "sed -i 's/UnreadMail: $UNREADCOUNT/UnreadMail: $(($UNREADCOUNT + 1))/g' $MAILFILE/FAC@$FACTION"
+				CURRENTMAILID=$(grep "CurrentMailId:" $MAILFILE/FAC@$FACTION | cut -d" " -f4)
+				echo "MessageID: $CURRENTMAILID Unread: Yes Sender: GALACTICEBANK Time: $(date +%s) Message: Your faction has made the successful purchase of sector $PLAYERSECTOR" >> $MAILFILE/FAC@$FACTION
+				as_user "sed -i 's/CurrentMailId: $CURRENTMAILID/CurrentMailId: $(($CURRENTMAILID + 1))/g' $MAILFILE/FAC@$FACTION" 
+			else
+				as_user "screen -p 0 -S $SCREENID -X stuff $'/pm $1 GALACTICE BANK - Your faction cannot afford this sector. it would cost $THISSECTORCOST\n'"
+			fi
+		else
+			as_user "screen -p 0 -S $SCREENID -X stuff $'/pm $1 GALACTICE BANK - This sector is already owned!\n'"
+		fi
+	else
+		as_user "screen -p 0 -S $SCREENID -X stuff $'/pm $1 GALACTICE BANK - You are not in a registered faction.\n'"
+	fi
+fi
+}
+function COMMAND_SECTORLIST(){
+#Lists all sectors that belong to your faction
+#USAGE: !SECTORLIST
+if [ "$#" -ne 1 ]
+then
+	as_user "screen -p 0 -S $SCREENID -X stuff $'/pm $1 Invalid parameters. Please use !SECTORLIST\n'"
+else
+	as_user "screen -p 0 -S $SCREENID -X stuff $'/pm $1 GALACTICE BANK - Gathering sector information...\n'"
+	log_playerinfo $1
+	FACTION=$(grep "PlayerFaction=" $PLAYERFILE/$1 | cut -d= -f2)
+	if [ ! $FACTION = "None" ]
+	then
+		while read SECTOR
+		do
+			SECTORDATA=($SECTOR)
+			if [ ${SECTORDATA[1]} = $FACTION ]
+			then
+				as_user "screen -p 0 -S $SCREENID -X stuff $'/pm $1 [Sector: ${SECTORDATA[0]} Credits: ${SECTORDATA[3]}]\n'"
+			fi
+		done < $SECTORFILE
+		as_user "screen -p 0 -S $SCREENID -X stuff $'/pm $1 GALACTICE BANK - Your faction owns sectors:\n'"
+	else
+		as_user "screen -p 0 -S $SCREENID -X stuff $'/pm $1 GALACTICE BANK - You are not in a faction!\n'"
+	fi
+fi
+}
+function COMMAND_BEACONWITHDRAW(){
+#Takes money out of a beacon that you own. Only works if you are within a sector that contains a beacon
+#USAGE: !BEACONWITHDRAW <Amount>
+if [ "$#" -ne 2 ]
+then
+	as_user "screen -p 0 -S $SCREENID -X stuff $'/pm $1 Invalid parameters. Please use !BEACONWITHDRAW <Amount/All>\n'"
+else
+	as_user "screen -p 0 -S $SCREENID -X stuff $'/pm $1 GALACTICE BANK - Gathering sector information...\n'"
+	log_playerinfo $1
+	FACTION=$(grep "PlayerFaction=" $PLAYERFILE/$1 | cut -d= -f2)
+	if [ ! $FACTION = "None" ]
+	then
+		SECTOR=$(grep "PlayerLocation=" $PLAYERFILE/$1 | cut -d= -f2)
+		if grep -q -- " $SECTOR " $SECTORFILE
+		then
+			SECTORDATA=($(grep -- " $SECTOR " $SECTORFILE))
+			if [ $FACTION -eq ${SECTORDATA[1]} ]
+			then
+				if [ $(echo $2 | tr [a-z] [A-Z]) = "ALL" ]
+				then
+					FACTIONCREDITS=$(($(grep "CreditsInBank" $FACTIONFILE/$FACTION | cut -d= -f2) + ${SECTORDATA[3]}))
+					SECTORDATA[3]=0
+				else
+					SECTORDATA[3]=$((${SECTORDATA[3]} - $2))
+					FACTIONCREDITS=$(($(grep "CreditsInBank=" $FACTIONFILE/$FACTION | cut -d= -f2) + $2))
+				fi
+				as_user "sed -i 's/CreditsInBank=.*/CreditsInBank=$FACTIONCREDITS/g' $FACTIONFILE/$FACTION"
+				as_user "sed -i 's/ ${SECTORDATA[0]} .*/ $(echo ${SECTORDATA[@]})/g' $SECTORFILE"
+				as_user "screen -p 0 -S $SCREENID -X stuff $'/pm $1 GALACTICE BANK - You have taken $2 credits from beacon $(echo ${SECTORDATA[4]} | cut -d"_" -f5) in sector ${SECTORDATA[1]}\n'"
+			else
+				as_user "screen -p 0 -S $SCREENID -X stuff $'/pm $1 GALACTICE BANK - This sector does not belong to your faction\n'"
+			fi
+		else
+			as_user "screen -p 0 -S $SCREENID -X stuff $'/pm $1 GALACTICE BANK - No records of a sector claim here exist!\n'"
+		fi
+	else
+		as_user "screen -p 0 -S $SCREENID -X stuff $'/pm $1 GALACTICE BANK - You are not in a faction!\n'"
+	fi
+fi
+}
+function COMMAND_BEACONBALANCE(){
+#Takes money out of a beacon that you own. Only works if you are within a sector that contains a beacon
+#USAGE: !BEACONBALANCE
+if [ "$#" -ne 1 ]
+then
+	as_user "screen -p 0 -S $SCREENID -X stuff $'/pm $1 Invalid parameters. Please use !BEACONBALANCE\n'"
+else
+	as_user "screen -p 0 -S $SCREENID -X stuff $'/pm $1 GALACTICE BANK - Gathering sector information...\n'"
+	log_playerinfo $1
+	FACTION=$(grep "PlayerFaction=" $PLAYERFILE/$1 | cut -d= -f2)
+	if [ ! $FACTION = "None" ]
+	then
+		SECTOR=$(grep "PlayerLocation=" $PLAYERFILE/$1 | cut -d= -f2)
+		if grep -q -- " $SECTOR " $SECTORFILE
+		then
+			SECTORDATA=($(grep -- " $SECTOR " $SECTORFILE))
+			if [ $FACTION -eq ${SECTORDATA[1]} ]
+			then
+				as_user "screen -p 0 -S $SCREENID -X stuff $'/pm $1 GALACTICE BANK - Beacon $(echo ${SECTORDATA[4]} | cut -d"_" -f5) in sector ${SECTORDATA[1]} contains ${SECTORDATA[3]} credits \n'"
+			else
+				as_user "screen -p 0 -S $SCREENID -X stuff $'/pm $1 GALACTICE BANK - This sector does not belong to your faction\n'"
+			fi
+		else
+			as_user "screen -p 0 -S $SCREENID -X stuff $'/pm $1 GALACTICE BANK - No records of a sector claim here exist!\n'"
+		fi
+	else
+		as_user "screen -p 0 -S $SCREENID -X stuff $'/pm $1 GALACTICE BANK - You are not in a faction!\n'"
+	fi
+fi
+}
+function COMMAND_BEACONSELL(){
+#Takes money out of a beacon that you own. Only works if you are within a sector that contains a beacon
+#USAGE: !BEACONSELL
+if [ "$#" -ne 1 ]
+then
+	as_user "screen -p 0 -S $SCREENID -X stuff $'/pm $1 Invalid parameters. Please use !BEACONSELL\n'"
+else
+	as_user "screen -p 0 -S $SCREENID -X stuff $'/pm $1 GALACTICE BANK - Gathering sector information...\n'"
+	log_playerinfo $1
+	FACTION=$(grep "PlayerFaction=" $PLAYERFILE/$1 | cut -d= -f2)
+	if [ ! $FACTION = "None" ]
+	then
+		SECTOR=$(grep "PlayerLocation=" $PLAYERFILE/$1 | cut -d= -f2)
+		if grep -q -- " $SECTOR " $SECTORFILE
+		then
+			SECTORDATA=($(grep -- " $SECTOR " $SECTORFILE))
+			if [ $FACTION -eq ${SECTORDATA[1]} ]
+			then
+				FACTIONCREDITS=$(($(grep "CreditsInBank" $FACTIONFILE/$FACTION | cut -d= -f2) + ${SECTORDATA[3]} + (${SECTORDATA[5]} * $SECTORREFUND / 100)))
+				as_user "sed -i 's/CreditsInBank=.*/CreditsInBank=$FACTIONCREDITS/g' $FACTIONFILE/$FACTION"
+				as_user "sed -i '/ ${SECTORDATA[0]} .*/d' $SECTORFILE"
+				as_user "sed -i 's/ ${SECTORDATA[0]}//g' $FACTIONFILE/$FACTION"
+				as_user "sed -i '/^.*${SECTOR}.*/d' $PROTECTEDSECTORS"
+				sectoradjacent $FACTION
+				as_user "screen -p 0 -S $SCREENID -X stuff $'/pm $1 GALACTICE BANK - You have sucessfully sold the sector for $((${SECTORDATA[3]} + (${SECTORDATA[5]} * $SECTORREFUND / 100))) credits.\n'"
+			else
+				as_user "screen -p 0 -S $SCREENID -X stuff $'/pm $1 GALACTICE BANK - This sector does not belong to your faction\n'"
+			fi
+		else
+			as_user "screen -p 0 -S $SCREENID -X stuff $'/pm $1 GALACTICE BANK - No records of a sector claim here exist!\n'"
+		fi
+	else
+		as_user "screen -p 0 -S $SCREENID -X stuff $'/pm $1 GALACTICE BANK - You are not in a faction!\n'"
+	fi
+fi
+}
+
 #Mail Commands
 function COMMAND_MAIL(){
 #A fully functional mail box system. You can send, read, view by unread and delete messages
@@ -1623,7 +2369,7 @@ function COMMAND_MAIL(){
 	# Checks if the player entered LIST as the second parameter
 	if [ "$#" -lt "2" ]
 	then
-		as_user "screen -p 0 -S $SCREENID -X stuff $'/pm $1 Invalid parameters. Please use !MAIL LIST <All/Unread>\n'"
+		as_user "screen -p 0 -S $SCREENID -X stuff $'/pm $1 Invalid parameters. Please use !MAIL HELP for a help list\n'"
 	else	
 		if [ $(echo $2 | tr [a-z] [A-Z]) = "LIST" ]
 		then
@@ -1666,11 +2412,11 @@ function COMMAND_MAIL(){
 #								If the user entered all as an otion, it tells the user the mail info
 								if [ $(echo $3 | tr [a-z] [A-Z]) = "ALL" ]
 								then
-									as_user "screen -p 0 -S $SCREENID -X stuff $'/pm $1 Mail #$MAILID: Message from $SENDER at $TIME on $DATE\n'"
+									as_user "screen -p 0 -S $SCREENID -X stuff $'/pm $1 MailID $MAILID: Message from $SENDER at $TIME on $DATE\n'"
 #								if the user entered unread as a parameter then only tell the user the mail info if $UNREAD = Yes
 								elif [ $(echo $3 | tr [a-z] [A-Z]) = "UNREAD" ] && [ $UNREAD = "Yes" ]
 								then
-									as_user "screen -p 0 -S $SCREENID -X stuff $'/pm $1 Mail #$MAILID: Message from $SENDER at $TIME on $DATE\n'"
+									as_user "screen -p 0 -S $SCREENID -X stuff $'/pm $1 MailID $MAILID: Message from $SENDER at $TIME on $DATE\n'"
 								fi
 							fi
 						done
@@ -1735,6 +2481,24 @@ function COMMAND_MAIL(){
 						as_user "sed -i 's/UnreadMail: $UNREADCOUNT/UnreadMail: $(($UNREADCOUNT - 1))/g' $MAILFILE/$1"
 					fi
 					as_user "screen -p 0 -S $SCREENID -X stuff $'/pm $1 Message from $SENDER, $DATE $TIME has been deleted.\n'"
+				elif [ $(echo $3 | tr [a-z] [A-Z]) = "ALL" ]
+				then
+					while read MAIL
+					do
+						if [[ ! $MAIL =~ "CurrentMailId:" ]]
+						then 
+							MAILDATA=$MAIL
+							UNREADCOUNT=$(grep "UnreadMail" $MAILFILE/FAC@$FACTION | cut -d" " -f2)
+							UNREAD=$(echo $MAILDATA | cut -d" " -f4)
+							as_user "sed -i '/$MAILDATA/d' $MAILFILE/$1"
+#							Reduces the unreadcount by 1 if the mail deleted was unread
+							if [ $UNREAD = "Yes" ]
+							then
+								as_user "sed -i 's/UnreadMail: $UNREADCOUNT/UnreadMail: $(($UNREADCOUNT - 1))/g' $MAILFILE/$1"
+							fi
+						fi
+					done < $MAILFILE/$1
+					as_user "screen -p 0 -S $SCREENID -X stuff $'/pm $1 All mail has been deleted.\n'"
 				else
 					as_user "screen -p 0 -S $SCREENID -X stuff $'/pm $1 That message ID does not exist.\n'"
 				fi
@@ -1793,6 +2557,185 @@ function COMMAND_MAIL(){
 		fi
 	fi
 }
+function COMMAND_FMAIL(){
+#A fully functional mail box system. You can read, view by unread and delete messages from the server system. Based around factions
+#For indepth help, please use !FMAIL HELP
+	# Checks if the player entered LIST as the second parameter
+	if [ "$#" -lt "2" ]
+	then
+		as_user "screen -p 0 -S $SCREENID -X stuff $'/pm $1 Invalid parameters. Please use !FMAIL HELP for a help list\n'"
+	else
+		if [ $(echo $2 | tr [a-z] [A-Z]) = "LIST" ]
+		then
+			if [ "$#" -ne "3" ]
+			then
+				as_user "screen -p 0 -S $SCREENID -X stuff $'/pm $1 Invalid parameters. Please use !FMAIL LIST <All/Unread>\n'"
+			else
+				as_user "screen -p 0 -S $SCREENID -X stuff $'/pm $1 Validating mailbox access code. Please wait...\n'"
+				log_playerinfo $1
+				FACTION=$(grep "PlayerFaction=" $PLAYERFILE/$1 | cut -d= -f2)
+#				Checks if the player has a mail file. If not, make it with one new message from MailBoxPro welcoming the player to the mail box
+				if [ ! -e $MAILFILE/FAC@$FACTION ]
+				then
+					echo "UnreadMail: 1 CurrentMailId: 1" >> $MAILFILE/FAC@$FACTION
+					echo "MessageID: 0 Unread: Yes Sender: MailBoxPro Time: $(date +%s) Message: Welcome to the mail box faction $FACTION! Type !FMAIL HELP to see how to use the mail box!" >> $MAILFILE/FAC@$FACTION
+				fi
+#				Makes sure the user entered unread or all as the 3rd parameter
+				if [ $(echo $3 | tr [a-z] [A-Z]) = "UNREAD" ] || [ $(echo $3 | tr [a-z] [A-Z]) = "ALL" ]
+				then
+#					Checks if the player has mail (the first line of the mailbox is an info system)
+					if [ $(cat $MAILFILE/FAC@$FACTION | wc -l) = 1 ]
+					then
+						as_user "screen -p 0 -S $SCREENID -X stuff $'/pm $1 You have no mail\n'"
+#					Checks if they have unread mail or not if the user entered unread as an option
+					elif ! grep -q "Unread: Yes" $MAILFILE/FAC@$FACTION && [ $(echo $3 | tr [a-z] [A-Z]) = "UNREAD" ]
+					then
+						as_user "screen -p 0 -S $SCREENID -X stuff $'/pm $1 You have no unread mail\n'"
+					else
+						OLDIFS=$IFS
+						IFS=$'\n'
+#						Looks at every line in the player mail box in reverse order
+						for MAIL in $(tac $MAILFILE/FAC@$FACTION)
+						do
+#							Makes sure it isnt looking at the info line at the top of the file
+							if [[ ! $MAIL =~ "CurrentMailId:" ]]
+							then
+#								Decodes the line into date, time, sender, mailID and unread status
+								DATE=$( date -d @$(echo $MAIL | cut -d" " -f8) +"%a %d %b %Y")
+								TIME=$( date -d @$(echo $MAIL | cut -d" " -f8) +"%T")
+								SENDER=$(echo $MAIL | cut -d" " -f6)
+								UNREAD=$(echo $MAIL | cut -d" " -f4)
+								MAILID=$(echo $MAIL | cut -d" " -f2)
+#								If the user entered all as an otion, it tells the user the mail info
+								if [ $(echo $3 | tr [a-z] [A-Z]) = "ALL" ]
+								then
+									as_user "screen -p 0 -S $SCREENID -X stuff $'/pm $1 MailID $MAILID: Message from $SENDER at $TIME on $DATE\n'"
+#								if the user entered unread as a parameter then only tell the user the mail info if $UNREAD = Yes
+								elif [ $(echo $3 | tr [a-z] [A-Z]) = "UNREAD" ] && [ $UNREAD = "Yes" ]
+								then
+									as_user "screen -p 0 -S $SCREENID -X stuff $'/pm $1 MailID $MAILID: Message from $SENDER at $TIME on $DATE\n'"
+								fi
+							fi
+						done
+						as_user "screen -p 0 -S $SCREENID -X stuff $'/pm $1 Type !FMAIL READ <MailID> to read your factions messages\n'"
+						IFS=$OLDIFS
+					fi
+				else
+					as_user "screen -p 0 -S $SCREENID -X stuff $'/pm $1 Invalid parameters. Please use !FMAIL LIST <All/Unread>\n'"
+				fi
+			fi
+#		Checks if the player entered delete as the 2nd parameter
+		elif [ $(echo $2 | tr [a-z] [A-Z]) = "DELETE" ]
+		then
+			if [ "$#" -ne "3" ]
+			then
+				as_user "screen -p 0 -S $SCREENID -X stuff $'/pm $1 Invalid parameters. Please use !FMAIL DELETE <MessageID>\n'"
+			else
+				as_user "screen -p 0 -S $SCREENID -X stuff $'/pm $1 Validating mailbox access code. Please wait...\n'"
+				log_playerinfo $1
+				FACTION=$(grep "PlayerFaction=" $PLAYERFILE/$1 | cut -d= -f2)
+#				Checks if the player has a mail file. If not, make it with one new message from MailBoxPro welcoming the player to the mail box
+				if [ ! -e $MAILFILE/FAC@$FACTION ]
+				then
+					echo "UnreadMail: 1 CurrentMailId: 1" >> $MAILFILE/FAC@$FACTION
+					echo "MessageID: 0 Unread: Yes Sender: MailBoxPro Time: $(date +%s) Message: Welcome to the mail box $1! Type !FMAIL HELP to see how to use the mail box!" >> $MAILFILE/FAC@$FACTION
+				fi
+#				checks if the specified mailID exists in the players mailfile
+				if grep -q "MessageID: $3" $MAILFILE/FAC@$FACTION
+				then
+#					Decodes all needed data from the mailfile
+					MAILDATA=$(grep "MessageID: $3" $MAILFILE/FAC@$FACTION)
+					UNREADCOUNT=$(grep "UnreadMail" $MAILFILE/FAC@$FACTION | cut -d" " -f2)
+					DATE=$( date -d @$(echo $MAILDATA | cut -d" " -f8) +"%a %d %b %Y")
+					TIME=$( date -d @$(echo $MAILDATA | cut -d" " -f8) +"%T")
+					MESSAGE=$(echo $MAILDATA | cut -d" " -f10-)
+					SENDER=$(echo $MAILDATA | cut -d" " -f6)
+					UNREAD=$(echo $MAILDATA | cut -d" " -f4)
+					as_user "sed -i '/MessageID: $3/d' $MAILFILE/FAC@$FACTION"
+#					Reduces the unreadcount by 1 if the mail deleted was unread
+					if [ $UNREAD = "Yes" ]
+					then
+						as_user "sed -i 's/UnreadMail: $UNREADCOUNT/UnreadMail: $(($UNREADCOUNT - 1))/g' $MAILFILE/FAC@$FACTION"
+					fi
+					as_user "screen -p 0 -S $SCREENID -X stuff $'/pm $1 Message from $SENDER, $DATE $TIME has been deleted.\n'"
+				elif [ $(echo $3 | tr [a-z] [A-Z]) = "ALL" ]
+				then
+					while read MAIL
+					do
+						if [[ ! $MAIL =~ "CurrentMailId:" ]]
+						then 
+							MAILDATA=$MAIL
+							UNREADCOUNT=$(grep "UnreadMail" $MAILFILE/FAC@$FACTION | cut -d" " -f2)
+							UNREAD=$(echo $MAILDATA | cut -d" " -f4)
+							as_user "sed -i '/$MAILDATA/d' $MAILFILE/FAC@$FACTION"
+#							Reduces the unreadcount by 1 if the mail deleted was unread
+							if [ $UNREAD = "Yes" ]
+							then
+								as_user "sed -i 's/UnreadMail: $UNREADCOUNT/UnreadMail: $(($UNREADCOUNT - 1))/g' $MAILFILE/FAC@$FACTION"
+							fi
+						fi
+					done < $MAILFILE/FAC@$FACTION
+					as_user "screen -p 0 -S $SCREENID -X stuff $'/pm $1 All mail has been deleted.\n'"
+				else
+					as_user "screen -p 0 -S $SCREENID -X stuff $'/pm $1 That message ID does not exist.\n'"
+				fi
+			fi
+#		Checks if the player entered read as the 2nd parameter
+		elif [ $(echo $2 | tr [a-z] [A-Z]) = "READ" ]
+		then
+			if [ "$#" -ne "3" ]
+			then
+				as_user "screen -p 0 -S $SCREENID -X stuff $'/pm $1 Invalid parameters. Please use !FMAIL READ <MailID>\n'"
+			else
+				as_user "screen -p 0 -S $SCREENID -X stuff $'/pm $1 Validating mailbox access code. Please wait...\n'"
+				log_playerinfo $1
+				FACTION=$(grep "PlayerFaction=" $PLAYERFILE/$1 | cut -d= -f2)
+#				Checks if the player has a mail file. If not, make it with one new message from MailBoxPro welcoming the player to the mail box
+				if [ ! -e $MAILFILE/FAC@$FACTION ]
+				then
+					echo "UnreadMail: 1 CurrentMailId: 1" >> $MAILFILE/FAC@$FACTION
+					echo "MessageID: 0 Unread: Yes Sender: MailBoxPro Time: $(date +%s) Message: Welcome to the mail box $1! Type !FMAIL HELP to see how to use the mail box!" >> $MAILFILE/FAC@$FACTION
+				fi
+#				checks if the specified mailID exists in the players mailfile
+				if grep -q "MessageID: $3" $MAILFILE/FAC@$FACTION
+				then
+#					Decodes all needed data from the mailfile
+					MAILDATA=$(grep "MessageID: $3" $MAILFILE/FAC@$FACTION)
+					UNREADCOUNT=$(grep "UnreadMail" $MAILFILE/FAC@$FACTION | cut -d" " -f2)
+					DATE=$( date -d @$(echo $MAILDATA | cut -d" " -f8) +"%a %d %b %Y")
+					TIME=$( date -d @$(echo $MAILDATA | cut -d" " -f8) +"%T")
+					MESSAGE=$(echo $MAILDATA | cut -d" " -f10-)
+					SENDER=$(echo $MAILDATA | cut -d" " -f6)
+#					Tells the user the sender, date, time and message with the specified mailID
+					as_user "screen -p 0 -S $SCREENID -X stuff $'/pm $1 Message from $SENDER, $DATE $TIME: $MESSAGE\n'"
+					as_user "screen -p 0 -S $SCREENID -X stuff $'/pm $1 Type !FMAIL DELETE $3 when you want to delete this message.\n'"
+#					Sets the message's Unread field to no and reduces the unread count by 1 if the mail was unread
+					if grep -q "Unread: Yes" $MAILFILE/FAC@$FACTION
+					then
+						as_user "sed -i 's/MessageID: $3 Unread: Yes/MessageID: $3 Unread: No/g' $MAILFILE/FAC@$FACTION"
+						as_user "sed -i 's/UnreadMail: $UNREADCOUNT/UnreadMail: $(($UNREADCOUNT - 1))/g' $MAILFILE/FAC@$FACTION"
+					fi
+				else
+					as_user "screen -p 0 -S $SCREENID -X stuff $'/pm $1 That message ID does not exist.\n'"
+				fi
+			fi
+		elif [ $(echo $2 | tr [a-z] [A-Z]) = "HELP" ]
+		then
+			if [ "$#" -ne "2" ]
+			then
+				as_user "screen -p 0 -S $SCREENID -X stuff $'/pm $1 Invalid parameters. Please use !FMAIL HELP\n'"
+			else
+				as_user "screen -p 0 -S $SCREENID -X stuff $'/pm $1 To delete mail, type !FMAIL DELETE <MailID>\n'"
+				as_user "screen -p 0 -S $SCREENID -X stuff $'/pm $1 To see mail in your faction inbox, type !FMAIL LIST <Unread/All>\n'"
+				as_user "screen -p 0 -S $SCREENID -X stuff $'/pm $1 To read mail, type !FMAIL READ <MailID>\n'"
+				as_user "screen -p 0 -S $SCREENID -X stuff $'/pm $1 Command options:\n'"
+				as_user "screen -p 0 -S $SCREENID -X stuff $'/pm $1 Welcome to the integrated MailBoxPro help service.\n'"
+			fi
+		else
+			as_user "screen -p 0 -S $SCREENID -X stuff $'/pm $1 Invalid parameters. Please use !FMAIL HELP for all mail commands\n'"
+		fi
+	fi
+}
 function COMMAND_MAILALL(){
 	if [ "$#" -lt "2" ]
 	then
@@ -1814,7 +2757,7 @@ then
 	as_user "screen -p 0 -S $SCREENID -X stuff $'/pm $1 Invalid parameters. Please use !POSTBOUNTY <player> <amount>\n'"
 else
 #	echo "$1 wants to place a $3 credit bounty on $2"
-	BALANCECREDITS=$(grep CreditsInBank: $PLAYERFILE/$1 | cut -d: -f2 | tr -d ' ')
+	BALANCECREDITS=$(grep CreditsInBank $PLAYERFILE/$1 | cut -d= -f2 | tr -d ' ')
 #	echo "Current bank credits are $BALANCECREDITS"
 	if [ "$1" = "$2" ]
 	then
@@ -1828,7 +2771,7 @@ else
 			then
 				if [ "$3" -le "$BALANCECREDITS" ]
 				then
-					OLDBOUNTY=$(grep Bounty $PLAYERFILE/$2 | cut -d" " -f2)
+					OLDBOUNTY=$(grep Bounty $PLAYERFILE/$2 | cut -d= -f2 | cut -d" " -f1)
 #					echo "The old bounty is $OLDBOUNTY"
 #					echo "Current bounty found"
 					CURRENTBOUNTY=$(( $OLDBOUNTY + $3 ))
@@ -1836,12 +2779,12 @@ else
 					NEWBALANCE=$(( $BALANCECREDITS - $3 ))
 					if [ "$OLDBOUNTY" -eq "0" ]
 					then
-						as_user "sed -i 's/Bounty: .*/Bounty: $CURRENTBOUNTY $(date +%s)/g' $PLAYERFILE/$2"
-						as_user "sed -i 's/CreditsInBank: $BALANCECREDITS/CreditsInBank: $NEWBALANCE/g' $PLAYERFILE/$1"
+						as_user "sed -i 's/Bounty=.*/Bounty=$CURRENTBOUNTY $(date +%s)/g' $PLAYERFILE/$2"
+						as_user "sed -i 's/CreditsInBank=$BALANCECREDITS/CreditsInBank=$NEWBALANCE/g' $PLAYERFILE/$1"
 						as_user "screen -p 0 -S $SCREENID -X stuff $'/pm $1 GALACTIC COMMAND - You have placed a bounty of $3 on $2\n'"
 					else
-						as_user "sed -i 's/Bounty: $OLDBOUNTY/Bounty: $CURRENTBOUNTY/g' $PLAYERFILE/$2"
-						as_user "sed -i 's/CreditsInBank: $BALANCECREDITS/CreditsInBank: $NEWBALANCE/g' $PLAYERFILE/$1"
+						as_user "sed -i 's/Bounty=$OLDBOUNTY/Bounty=$CURRENTBOUNTY/g' $PLAYERFILE/$2"
+						as_user "sed -i 's/CreditsInBank=$BALANCECREDITS/CreditsInBank=$NEWBALANCE/g' $PLAYERFILE/$1"
 						as_user "screen -p 0 -S $SCREENID -X stuff $'/pm $1 GALACTIC COMMAND - You have placed a bounty of $3 on $2\n'"
 				
 					fi
@@ -1862,28 +2805,17 @@ if [ "$#" -ne "1" ]
 	then
 		as_user "screen -p 0 -S $SCREENID -X stuff $'/pm $1 Invalid parameters. Please use !LISTBOUNTY\n'"
 	else
-		PLAYERFILES=( $PLAYERFILE/* )
-#		echo "Here are playerfiles ${PLAYERFILES[@]}"
-		ARRAY=0
-		while [ -n "${PLAYERFILES[$ARRAY]+set}" ]
+		for PBOUNTY in $PLAYERFILE/*
 		do
-			BOUNTY=$(grep "Bounty" ${PLAYERFILES[$ARRAY]} | cut -d" " -f2 )
-			PLAYER=$(echo "${PLAYERFILES[$ARRAY]}" | rev | cut -d"/" -f1 | rev )
-#			echo "Player $ARRAY is $PLAYER"
-#			echo "Bounty $ARRAY is $BOUNTY"
-			if [ "$BOUNTY" -gt "0" ]
+			BOUNTYAMMOUNT=$(grep "Bounty" $BOUNTY | cut -d= -f2 | cut -d" " -f1)
+			if [ "$BOUNTYAMMOUNT" -gt "0" ]
 			then
-				BOUNTYLIST+=($PLAYER)
-				BOUNTYLIST+=(":")
-				BOUNTYLIST+=($BOUNTY)
+			BOUNTYNAME=$(echo $PBOUNTY | rev | cut -d/ -f1 | rev)
+			as_user "screen -p 0 -S $SCREENID -X stuff $'/pm $1 $BOUNTYNAME - $BOUNTYAMMOUNT credits\n'"
 			fi
-		let ARRAY++
 		done
-#		echo "Final list ${BOUNTYLIST[@]}"
-		BOUNTYDISPLAY=${BOUNTYLIST[@]}
-		as_user "screen -p 0 -S $SCREENID -X stuff $'/pm $1 GALACTIC COMMAND - The current bounties are $BOUNTYDISPLAY\n'"
+	as_user "screen -p 0 -S $SCREENID -X stuff $'/pm $1 GALACTIC COMMAND - The current bounties are:\n'"
 	fi
-
 #PLAYERFILES=( $(find /home/reed/playerfiles -type f | cut -d\/ -f5) )
 #playerfiles -type f | cut -d\/ -f5	
 
@@ -1896,8 +2828,8 @@ then
 	as_user "screen -p 0 -S $SCREENID -X stuff $'/pm $1 Invalid parameters. Please use !COLLECTBOUNTY <playername>\n'"
 else
 #	echo "$1 is trying to collect a bounty"
-	BOUNTYAMOUNT=$(grep Bounty $PLAYERFILE/$2 | cut -d" " -f2)
-	BOUNTYTIME=$(grep Bounty $PLAYERFILE/$2 | cut -d" " -f3)
+	BOUNTYAMOUNT=$(grep Bounty $PLAYERFILE/$2 | cut -d= -f2 | cut -d" " -f1)
+	BOUNTYTIME=$(grep Bounty $PLAYERFILE/$2 | cut -d" " -f2)
 #	echo "This is the bounty amount for $2 $BOUNTYAMOUNT"
 	if [ "$BOUNTYAMOUNT" -eq 0 ]
 	then
@@ -1920,12 +2852,12 @@ else
 			if [ "$BOUNTYTIME" -lt "$LASTKILLEDTIME" ]
 			then
 #				echo "Bounty posted before kill"					
-				PLAYERBALANCE=$(grep CreditsInBank $PLAYERFILE/$1 | cut -d" " -f2)
+				PLAYERBALANCE=$(grep CreditsInBank $PLAYERFILE/$1 | cut -d= -f2)
 #				echo "This is the player balance $PLAYERBALANCE that is recieving the bounty"
 				NEWBALANCE=$(( $PLAYERBALANCE + $BOUNTYAMOUNT ))
 #				echo "This is the new player balance $NEWBALACE"
-				as_user "sed -i 's/CreditsInBank: .*/CreditsInBank: $NEWBALANCE/g' $PLAYERFILE/$1"
-				as_user "sed -i 's/Bounty: .*/Bounty: 0/g' $PLAYERFILE/$2"
+				as_user "sed -i 's/CreditsInBank=.*/CreditsInBank=$NEWBALANCE/g' $PLAYERFILE/$1"
+				as_user "sed -i 's/Bounty=.*/Bounty=0/g' $PLAYERFILE/$2"
 				as_user "screen -p 0 -S $SCREENID -X stuff $'/pm $1 GALACTIC COMMAND - You received $BOUNTYAMOUNT credits in you account from eliminating $2\n'"
 			else
 #				echo "Bounty posted after kill"
@@ -1952,8 +2884,8 @@ function COMMAND_FOLD(){
 			ADJUSTEDTIME=$(( $CURRENTTIME - 600 ))
 			if [ "$ADJUSTEDTIME" -gt "$OLDPLAYERLASTFOLD" ]
 			then
-				SECTOR[$1]=$(grep "PlayerLocation:" $PLAYERFILE/$1 | cut -d" " -f2)
-				DISTANCE=$(echo "($(echo ${SECTOR[$1]} | cut -d"," -f1)-$2)^2+($(echo ${SECTOR[$1]} | cut -d"," -f2)-$3)^2+($(echo ${SECTOR[$1]} | cut -d"," -f3)-$4)^2" | bc)
+				SECTOR[$1]=$(grep "PlayerLocation=" $PLAYERFILE/$1 | cut -d= -f2)
+				DISTANCE=$(echo "($(echo ${SECTOR[$1]} | cut -d"," -f1)- $2)^2+($(echo ${SECTOR[$1]} | cut -d"," -f2)- $3)^2+($(echo ${SECTOR[$1]} | cut -d"," -f3)- $4)^2" | bc)
 				if [ "$DISTANCE" -le "$FOLDLIMIT" ]
 				then
 					WARMUP=50
@@ -2014,7 +2946,7 @@ function COMMAND_ADDJUMP(){
 		if ! grep -q $2 $GATELOG
 		then
 #			Gets players location and faction
-			SECTOR[$1]=$(grep "PlayerLocation:" $PLAYERFILE/$1 | cut -d" " -f2)
+			SECTOR[$1]=$(grep "PlayerLocation=" $PLAYERFILE/$1 | cut -d= -f2)
 			CONTROLLINGOBJECT[$1]=$(grep "PlayerControllingObject:" $PLAYERFILE/$1 | cut -d" " -f2)
 			CONTROLLINGTYPE[$1]=$(grep "PlayerControllingType:" $PLAYERFILE/$1 | cut -d" " -f2)
 			if [[ "$CONTROLLINGTYPE" == "Spacestation" ]]
@@ -2022,12 +2954,12 @@ function COMMAND_ADDJUMP(){
 				if ! grep -q ${SECTOR[$1]} $GATELOG
 				then
 #					Checks if player can afford the gate
-					VOTINGPOINTS=$(grep "VotingPoints:" $PLAYERFILE/$1 | cut -d" " -f2)
+					VOTINGPOINTS=$(grep "VotingPoints=" $PLAYERFILE/$1 | cut -d= -f2)
 					if [ $VOTINGPOINTS -ge $GATECOST ]
 					then
 #						Removes the cost of the gate from the players voting points
 						let "VOTESSAVED=$VOTINGPOINTS-$GATECOST"
-						as_user "sed -i 's/VotingPoints: $VOTINGPOINTS/VotingPoints: $VOTESSAVED/g' $PLAYERFILE/$1"
+						as_user "sed -i 's/VotingPoints=$VOTINGPOINTS/VotingPoints=$VOTESSAVED/g' $PLAYERFILE/$1"
 #						Add the gate to the gates.log file
 						echo "Name: $2 Sector: ${SECTOR[$1]} Level: 1 Creator: $1 TotalCost: $GATECOST LinkedEntity: ${CONTROLLINGOBJECT[$1]}" >> $GATELOG
 						as_user "screen -p 0 -S $SCREENID -X stuff $'/pm $1 If someone destroys the station ${CONTROLLINGOBJECT[$1]} the the gate will be destroyed and you will not be refunded\n'"
@@ -2074,9 +3006,9 @@ function COMMAND_JUMP(){
 	then
 		as_user "screen -p 0 -S $SCREENID -X stuff $'/pm $1 Invalid parameters. Please use !JUMP <Destination Name>\n'"
 	else
-		if [[ $(grep "JumpDisabled:" $PLAYERFILE/$1 | cut -d" " -f2) -le $(date +%s) ]]
+		if [[ $(grep "JumpDisabled=" $PLAYERFILE/$1 | cut -d= -f2) -le $(date +%s) ]]
 		then
-			SECTOR[$1]=$(grep "PlayerLocation:" $PLAYERFILE/$1 | cut -d" " -f2)
+			SECTOR[$1]=$(grep "PlayerLocation=" $PLAYERFILE/$1 | cut -d= -f2)
 			CONTROLLINGTYPE[$1]=$(grep "PlayerControllingType:" $PLAYERFILE/$1 | cut -d" " -f2)
 			if [[ "${CONTROLLINGTYPE[$1]}" == "Ship" ]]
 			then
@@ -2096,7 +3028,7 @@ function COMMAND_JUMP(){
 #							Prepares for jump
 							WARMUP=$(echo ${GATETEIR[${GATEINFO[5]}]} | cut -d" " -f2)
 							COOLTIME=$(($(date +%s)+$(echo ${GATETEIR[${GATEINFO[5]}]} | cut -d" " -f3)+$WARMUP))
-							as_user "sed -i 's/JumpDisabled: $(grep "JumpDisabled:" $PLAYERFILE/$1 | cut -d" " -f2)/JumpDisabled: $COOLTIME/g' $PLAYERFILE/$1"
+							as_user "sed -i 's/JumpDisabled=$(grep "JumpDisabled=" $PLAYERFILE/$1 | cut -d= -f2)/JumpDisabled=$COOLTIME/g' $PLAYERFILE/$1"
 							as_user "screen -p 0 -S $SCREENID -X stuff $'/pm $1 Your ship is preparing for a Jump! Please dont leave the vacinity of the jumpgate or your Jump will fail!\n'"
 							as_user "screen -p 0 -S $SCREENID -X stuff $'/pm $1 Jump in...\n'"
 #							Sets the time delay before the player is teleported, based on the level of the gate
@@ -2109,7 +3041,7 @@ function COMMAND_JUMP(){
 							done
 #							Gets the players sector again, to make sure theyre in the same sector still
 							SECTORA=${SECTOR[$1]}
-							SECTOR[$1]=$(grep "PlayerLocation:" $PLAYERFILE/$1 | cut -d" " -f2)
+							SECTOR[$1]=$(grep "PlayerLocation=" $PLAYERFILE/$1 | cut -d= -f2)
 							CONTROLLINGTYPE[$1]=$(grep "PlayerControllingType:" $PLAYERFILE/$1 | cut -d" " -f2)
 							if [[ "$SECTORA" == "${SECTOR[$1]}" ]] && [[ "${CONTROLLINGTYPE[$1]}" == "Ship" ]]
 							then
@@ -2133,11 +3065,11 @@ function COMMAND_JUMP(){
 				as_user "screen -p 0 -S $SCREENID -X stuff $'/pm $1 You cannot jump unless you are in a ship!\n'"
 			fi
 		else
-			as_user "screen -p 0 -S $SCREENID -X stuff $'/pm $1 Your ships engines are still cooling down from your last jump. They will take roughly $(($(grep "JumpDisabled:" $PLAYERFILE/$1 | cut -d" " -f2)-$(date +%s))) seconds\n'"
+			as_user "screen -p 0 -S $SCREENID -X stuff $'/pm $1 Your ships engines are still cooling down from your last jump. They will take roughly $(($(grep "JumpDisabled=" $PLAYERFILE/$1 | cut -d= -f2)-$(date +%s))) seconds\n'"
 		fi
 	fi
 }
-function COMMAND_UPGRADEJUMP(){ 
+function COMMAND_UPGRADEJUMP(){ #Look at let statements with cutting of " " for compatability with new = format
 #Increases the teir of the specified jump gate by 1 at the cost of voting points. This reduces warm up and cooldown time.
 #USAGE: !UPGRADEJUMP <JumpName>
 	if [ "$#" -ne "2" ]
@@ -2147,7 +3079,7 @@ function COMMAND_UPGRADEJUMP(){
 #		Checks if the gate exists		
 		if grep -q -- $2 $GATELOG
 		then
-			SECTOR[$1]=$(grep "PlayerLocation:" $PLAYERFILE/$1 | cut -d" " -f2)
+			SECTOR[$1]=$(grep "PlayerLocation=" $PLAYERFILE/$1 | cut -d= -f2)
 			GATEINFO=($(grep -- " $2 " $GATELOG))
 #			Checks if the player has faction permission to upgrade the gate, or if the gate is faction All, check if theyre the creator of it	
 			if [[ "${GATEINFO[7]}" == "$1" ]]
@@ -2156,16 +3088,18 @@ function COMMAND_UPGRADEJUMP(){
 				if [ "${GATEINFO[5]}" -lt "${#GATETEIR[@]}" ]
 				then
 #					Checks if the player has enough voting points to upgrade the gate
-					VOTINGPOINTS=$(grep "VotingPoints:" $PLAYERFILE/$1 | cut -d" " -f2)
+					VOTINGPOINTS=$(grep "VotingPoints=" $PLAYERFILE/$1 | cut -d= -f2)
 					if [ $VOTINGPOINTS -ge $(echo ${GATETEIR[$((${GATEINFO[5]}+1))]} | cut -d" " -f1) ]
 					then
 #						Subtracts the cost of the upgrade from the players account
 						let "VOTESSAVED=$VOTINGPOINTS-$(echo ${GATETEIR[$((${GATEINFO[5]}+1))]} | cut -d" " -f1)"
-						as_user "sed -i 's/VotingPoints: .*/VotingPoints: $VOTESSAVED/g' $PLAYERFILE/$1"
+						as_user "sed -i 's/VotingPoints=.*/VotingPoints=$VOTESSAVED/g' $PLAYERFILE/$1"
 #						Alters the total cost of the gate so far
 						let "TOTALCOST=${GATEINFO[9]}+$(echo ${GATETEIR[$((${GATEINFO[5]}+1))]} | cut -d" " -f1)"
 #						edits the level of the gate
-						as_user "sed -i 's/Name: ${GATEINFO[1]} .*/$(echo ${GATEINFO[@]:0:5}) $((${GATEINFO[5]}+1)) $(echo ${GATEINFO[@]:6:3}) $TOTALCOST $(echo ${GATEINFO[@]:10})/g' $GATELOG"
+						GATEINFO[5]=$((${GATEINFO[5]} + 1))
+						GATEINFO[9]=$TOTALCOST
+						as_user "sed -i 's/Name: ${GATEINFO[1]} .*/$(echo ${GATEINFO[@]})/g' $GATELOG"
 						as_user "screen -p 0 -S $SCREENID -X stuff $'/pm $1 The gate was sucessfully upgraded to level $((${GATEINFO[5]}+1))\n'"
 					else
 						as_user "screen -p 0 -S $SCREENID -X stuff $'/pm $1 You dont have enough voting points to upgrade the gate! You need $(echo ${GATETEIR[$((${GATEINFO[7]}+1))]} | cut -d" " -f1) but only have $VOTINGPOINTS \n'"
@@ -2191,15 +3125,15 @@ function COMMAND_DESTROYJUMP(){
 #		Checks if the gate exists
 		if grep -q -- $2 $GATELOG
 		then
-			SECTOR[$1]=$(grep "PlayerLocation:" $PLAYERFILE/$1 | cut -d" " -f2)
+			SECTOR[$1]=$(grep "PlayerLocation=" $PLAYERFILE/$1 | cut -d= -f2)
 			GATEINFO=($(grep -- " $2 " $GATELOG))
 #			Checks if the player owns the gate
 			if [[ "${GATEINFO[7]}" == "$1" ]]
 			then
 				as_user "sed -i '/Name: ${GATEINFO[1]} .*/d' $GATELOG"
-				VOTINGPOINTS=$(grep "VotingPoints:" $PLAYERFILE/$1 | cut -d" " -f2)
+				VOTINGPOINTS=$(grep "VotingPoints=" $PLAYERFILE/$1 | cut -d= -f2)
 				let "VOTESSAVED=$VOTINGPOINTS+$((${GATEINFO[9]}*$GATEREFUND/100))"
-				as_user "sed -i 's/VotingPoints: .*/VotingPoints: $VOTESSAVED/g' $PLAYERFILE/$1"
+				as_user "sed -i 's/VotingPoints=.*/VotingPoints=$VOTESSAVED/g' $PLAYERFILE/$1"
 				as_user "screen -p 0 -S $SCREENID -X stuff $'/pm $1 The gate $2 has been deleted! You got $((${GATEINFO[9]}*$GATEREFUND/100)) voting points back\n'"
 			else
 				as_user "screen -p 0 -S $SCREENID -X stuff $'/pm $1 You dont have permission to delete that gate!\n'"
@@ -2277,7 +3211,7 @@ function COMMAND_DEPOSIT(){
 			as_user "screen -p 0 -S $SCREENID -X stuff $'/pm $1 GALACTIC BANK - You must put in a positive number\n'"
 		else 
 # Run playerinfo command to update playerfile and get the current player credits
-			as_user "screen -p 0 -S $SCREENID -X stuff $'/pm $1 Connecting to GALACTICE BANK servers\n'"
+			as_user "screen -p 0 -S $SCREENID -X stuff $'/pm $1 GALACTICE BANK - Connecting to servers\n'"
 			log_playerinfo $1
 #			as_user "screen -p 0 -S $SCREENID -X stuff $'/player_info $1\n'"
 #			echo "sent message to counsel, now sleeping"
@@ -2292,9 +3226,9 @@ function COMMAND_DEPOSIT(){
 #			echo "Adjusted time to remove 10 seconds $ADJUSTEDTIME"
 			if [ "$OLDTIME" -ge "$ADJUSTEDTIME" ]
 			then
-				BALANCECREDITS=$(grep CreditsInBank $PLAYERFILE/$1 | cut -d" " -f2- |  tr -d ' ')
+				BALANCECREDITS=$(grep CreditsInBank $PLAYERFILE/$1 | cut -d= -f2- |  tr -d ' ')
 #				echo $BALANCECREDITS
-				CREDITSTOTAL=$(grep CurrentCredits $PLAYERFILE/$1 | cut -d" " -f2- |  tr -d ' ')  
+				CREDITSTOTAL=$(grep CurrentCredits $PLAYERFILE/$1 | cut -d= -f2- |  tr -d ' ')  
 #				echo "Credits in log $CREDITTOTAL"
 #				echo "Total credits are $CREDITSTOTAL on person and $BALANCECREDITS in bank"
 #				echo "Credits to be deposited $2 "
@@ -2304,9 +3238,9 @@ function COMMAND_DEPOSIT(){
 					NEWBALANCE=$(( $2 + $BALANCECREDITS ))
 					NEWCREDITS=$(( $CREDITSTOTAL - $2 ))
 #					echo "new bank balance is $NEWBALANCE"
-					as_user "sed -i 's/CurrentCredits: $CREDITSTOTAL/CurrentCredits: $NEWCREDITS/g' $PLAYERFILE/$1"
-					as_user "sed -i 's/CreditsInBank: $BALANCECREDITS/CreditsInBank: $NEWBALANCE/g' $PLAYERFILE/$1"
-					#					as_user "sed -i '4s/.*/CreditsInBank: $NEWBALANCE/g' $PLAYERFILE/$1"
+					as_user "sed -i 's/CurrentCredits=$CREDITSTOTAL/CurrentCredits=$NEWCREDITS/g' $PLAYERFILE/$1"
+					as_user "sed -i 's/CreditsInBank=$BALANCECREDITS/CreditsInBank=$NEWBALANCE/g' $PLAYERFILE/$1"
+					#					as_user "sed -i '4s/.*/CreditsInBank=$NEWBALANCE/g' $PLAYERFILE/$1"
 					as_user "screen -p 0 -S $SCREENID -X stuff $'/give_credits $1 -$2\n'"
 					as_user "screen -p 0 -S $SCREENID -X stuff $'/pm $1 GALATIC BANK You successfully deposited $2 credits\n'"
 					as_user "screen -p 0 -S $SCREENID -X stuff $'/pm $1 GALATIC BANK Your balance is now $NEWBALANCE\n'"
@@ -2336,17 +3270,17 @@ function COMMAND_WITHDRAW(){
 		if ! test "$2" -gt 0 2> /dev/null
 		then
 			as_user "screen -p 0 -S $SCREENID -X stuff $'/pm $1 GALACTIC BANK - You must put in a positive number\n'"
-			else
+		else
 #			echo "Withdraw $2"
 			as_user "screen -p 0 -S $SCREENID -X stuff $'/pm $1 GALACTIC BANK - Connecting to servers\n'"
-			BALANCECREDITS=$(grep CreditsInBank $PLAYERFILE/$1 | cut -d: -f2 | tr -d ' ')
+			BALANCECREDITS=$(grep CreditsInBank $PLAYERFILE/$1 | cut -d= -f2 | tr -d ' ')
 #			echo "bank balance is $BALANCECREDITS"
 			if [ "$2" -le "$BALANCECREDITS" ]
 			then
 				NEWBALANCE=$(( $BALANCECREDITS - $2 ))
 #				echo "new balance for bank account is $NEWBALANCE"
 				as_user "screen -p 0 -S $SCREENID -X stuff $'/give_credits $1 $2\n'"
-				as_user "sed -i 's/CreditsInBank: $BALANCECREDITS/CreditsInBank: $NEWBALANCE/g' $PLAYERFILE/$1"
+				as_user "sed -i 's/CreditsInBank=$BALANCECREDITS/CreditsInBank=$NEWBALANCE/g' $PLAYERFILE/$1"
 				as_user "screen -p 0 -S $SCREENID -X stuff $'/pm $1 GALATIC BANK You successfully withdrawn $2 credits\n'"
 				as_user "screen -p 0 -S $SCREENID -X stuff $'/pm $1 GALATIC BANK Your balance is $NEWBALANCE credits\n'"
 				as_user "echo '$1 witdrew $2' >> $BANKLOG"
@@ -2371,17 +3305,17 @@ function COMMAND_TRANSFER(){
 		if [ -e $PLAYERFILE/$2 ] >/dev/null 
 		then
 			as_user "screen -p 0 -S $SCREENID -X stuff $'/pm $1 GALACTIC BANK - Connecting to servers\n'"
-			BALANCECREDITS=$(grep CreditsInBank $PLAYERFILE/$1 | cut -d: -f2 | tr -d ' ')
+			BALANCECREDITS=$(grep CreditsInBank $PLAYERFILE/$1 | cut -d= -f2 | tr -d ' ')
 #			echo "Player transferring has $BALANCECREDITS in account"
 			if [ "$3" -lt "$BALANCECREDITS" ]
 			then
-				TRANSFERBALANCE=$(grep CreditsInBank $PLAYERFILE/$2 | cut -d: -f2 | tr -d ' ')
+				TRANSFERBALANCE=$(grep CreditsInBank $PLAYERFILE/$2 | cut -d= -f2 | tr -d ' ')
 #				echo "Player receiving has $TRANSFERBALANCE in his account"
 				NEWBALANCETO=$(( $3 + $TRANSFERBALANCE ))
 				NEWBALANCEFROM=$(( $BALANCECREDITS - $3 ))
 #				echo "Changing $1 account to $NEWBALANCEFROM and $2 account to $NEWBALANCETO"
-				as_user "sed -i 's/CreditsInBank: $BALANCECREDITS/CreditsInBank: $NEWBALANCEFROM/g' $PLAYERFILE/$1"
-				as_user "sed -i 's/CreditsInBank: $TRANSFERBALANCE/CreditsInBank: $NEWBALANCETO/g' $PLAYERFILE/$2"
+				as_user "sed -i 's/CreditsInBank=$BALANCECREDITS/CreditsInBank=$NEWBALANCEFROM/g' $PLAYERFILE/$1"
+				as_user "sed -i 's/CreditsInBank=$TRANSFERBALANCE/CreditsInBank=$NEWBALANCETO/g' $PLAYERFILE/$2"
 				as_user "screen -p 0 -S $SCREENID -X stuff $'/pm $1 GALATIC BANK - You sent $3 credits to $2\n'"
 				as_user "screen -p 0 -S $SCREENID -X stuff $'/pm $1 GALATIC BANK - Your balance is now $NEWBALANCEFROM\n'"
 				as_user "echo '$1 transferred to $2 in the amount of $3' >> $BANKLOG"
@@ -2401,8 +3335,149 @@ function COMMAND_BALANCE(){
 	then
 		as_user "screen -p 0 -S $SCREENID -X stuff $'/pm $1 Invalid parameters. Please use !BALANCE\n'"
 	else
-	BALANCECREDITS=$(grep CreditsInBank $PLAYERFILE/$1 | cut -d: -f2 | tr -d ' ')
+	BALANCECREDITS=$(grep CreditsInBank $PLAYERFILE/$1 | cut -d= -f2 | tr -d ' ')
 	as_user "screen -p 0 -S $SCREENID -X stuff $'/pm $1 GALACTIC BANK - You have $BALANCECREDITS credits\n'"
+	fi
+}
+function COMMAND_FDEPOSIT(){
+#Allows you to deposit credits into a shared faction bank account
+#USAGE: !FDEPOSIT <Amount>
+	if [ "$#" -ne "2" ]
+	then
+		as_user "screen -p 0 -S $SCREENID -X stuff $'/pm $1 Invalid parameters. Please use !FACTIONDEPOSIT <Amount>\n'"
+	else
+		if [ "$2" -gt 0 ] 2>/dev/null
+		then
+			as_user "screen -p 0 -S $SCREENID -X stuff $'/pm $1 Connecting to GALACTICE BANK servers\n'"
+			log_playerinfo $1
+			FACTION=$(grep "PlayerFaction=" $PLAYERFILE/$1 | cut -d= -f2)
+			if [ ! $FACTION = "None" ]
+			then
+				create_factionfile $FACTION
+				CURRENTTIME=$(date +%s)
+#				echo "Current time $CURRENTTIME"
+				OLDTIME=$(grep PlayerLastUpdate $PLAYERFILE/$1 | cut -d" " -f2- |  tr -d ' ')
+#				echo "Old time from playerfile $OLDTIME"
+				ADJUSTEDTIME=$(( $CURRENTTIME - 10 ))
+#				echo "Adjusted time to remove 10 seconds $ADJUSTEDTIME"
+				if [ "$OLDTIME" -ge "$ADJUSTEDTIME" ]
+				then
+					BALANCECREDITS=$(grep CreditsInBank $FACTIONFILE/$FACTION | cut -d= -f2- |  tr -d ' ')
+#					echo $BALANCECREDITS
+					CREDITSTOTAL=$(grep CurrentCredits $PLAYERFILE/$1 | cut -d= -f2- |  tr -d ' ')  
+#					echo "Credits in log $CREDITTOTAL"
+#					echo "Total credits are $CREDITSTOTAL on person and $BALANCECREDITS in bank"
+#					echo "Credits to be deposited $2 "
+					if [ "$CREDITSTOTAL" -ge "$2" ]
+					then 
+#						echo "enough money detected"
+						NEWBALANCE=$(( $2 + $BALANCECREDITS ))
+						NEWCREDITS=$(( $CREDITSTOTAL - $2 ))
+#						echo "new bank balance is $NEWBALANCE"
+						as_user "sed -i 's/CurrentCredits=.*/CurrentCredits=$NEWCREDITS/g' $PLAYERFILE/$1"
+						as_user "sed -i 's/CreditsInBank=.*/CreditsInBank=$NEWBALANCE/g' $FACTIONFILE/$FACTION"
+#						as_user "sed -i '4s/.*/CreditsInBank=$NEWBALANCE/g' $PLAYERFILE/$1"
+						as_user "screen -p 0 -S $SCREENID -X stuff $'/give_credits $1 -$2\n'"
+						as_user "screen -p 0 -S $SCREENID -X stuff $'/pm $1 GALATIC BANK You successfully deposited $2 credits\n'"
+						as_user "screen -p 0 -S $SCREENID -X stuff $'/pm $1 GALATIC BANK Your factions balance is now $NEWBALANCE\n'"
+						as_user "echo '$1 deposited $2 into $FACTION bank account' >> $BANKLOG"
+					else
+						as_user "screen -p 0 -S $SCREENID -X stuff $'/pm $1 GALATIC BANK Insufficient money\n'"
+#						echo "not enough money"
+					fi
+				else
+#					echo "Time difference to great, playerfile not updated recently"
+					as_user "screen -p 0 -S $SCREENID -X stuff $'/pm $1 Connecting to GALACTICE BANK servers failed\n'"
+				fi
+			else
+				as_user "screen -p 0 -S $SCREENID -X stuff $'/pm $1 GALACTICE BANK - You are not in a faction\n'"
+			fi
+		else
+			as_user "screen -p 0 -S $SCREENID -X stuff $'/pm $1 Please enter a positive whole number\n'"
+		fi
+	fi
+}
+function COMMAND_FWITHDRAW(){
+#Allows you to withdraw from a shared faction account
+#USAGE: !FWITHDRAW <Amount>
+	if [ "$#" -ne "2" ]
+	then
+		as_user "screen -p 0 -S $SCREENID -X stuff $'/pm $1 Invalid parameters. Please use !FACTIONWITHDRAW <Amount>\n'"
+	else
+		if [ "$2" -gt 0 ] 2>/dev/null
+		then
+			as_user "screen -p 0 -S $SCREENID -X stuff $'/pm $1 GALACTICE BANK - Connecting to servers\n'"
+			log_playerinfo $1
+			FACTION=$(grep "PlayerFaction=" $PLAYERFILE/$1 | cut -d= -f2)
+			if [ ! $FACTION = "None" ]
+			then
+				create_factionfile $FACTION
+				BALANCECREDITS=$(grep CreditsInBank $FACTIONFILE/$FACTION | cut -d= -f2 | tr -d ' ')
+#				echo "bank balance is $BALANCECREDITS"
+				if [ "$2" -le "$BALANCECREDITS" ]
+				then
+					NEWBALANCE=$(( $BALANCECREDITS - $2 ))
+#					echo "new balance for bank account is $NEWBALANCE"
+					as_user "screen -p 0 -S $SCREENID -X stuff $'/give_credits $1 $2\n'"
+					as_user "sed -i 's/CreditsInBank=$BALANCECREDITS/CreditsInBank=$NEWBALANCE/g' $FACTIONFILE/$FACTION"
+					as_user "screen -p 0 -S $SCREENID -X stuff $'/pm $1 GALATIC BANK You successfully withdrawn $2 credits\n'"
+					as_user "screen -p 0 -S $SCREENID -X stuff $'/pm $1 GALATIC BANK The factions balance is $NEWBALANCE credits\n'"
+					as_user "echo '$1 witdrew $2 from $FACTION' >> $BANKLOG"
+				else
+					as_user "screen -p 0 -S $SCREENID -X stuff $'/pm $1 GALACTIC BANK - Your faction has insufficent funds\n'"
+				fi
+			else
+				as_user "screen -p 0 -S $SCREENID -X stuff $'/pm $1 GALACTIC BANK - You are not in a faction\n'"
+			fi
+		else
+			as_user "screen -p 0 -S $SCREENID -X stuff $'/pm $1 Please enter positive whole numbers only.\n'"
+		fi
+	fi
+
+}
+function COMMAND_FBALANCE(){
+#Allows you to see how many credits are in a shared faction account
+#USAGE: !FBALANCE
+	if [ "$#" -ne "1" ]
+	then
+		as_user "screen -p 0 -S $SCREENID -X stuff $'/pm $1 Invalid parameters. Please use !BALANCE\n'"
+	else
+		as_user "screen -p 0 -S $SCREENID -X stuff $'/pm $1 GALACTIC BANK - Connecting to servers\n'"
+		log_playerinfo $1
+		FACTION=$(grep "PlayerFaction" $PLAYERFILE/$1 | cut -d= -f2)
+		if [ ! $FACTION = "None" ]
+		then
+			BALANCECREDITS=$(grep CreditsInBank $FACTIONFILE/$FACTION | cut -d= -f2 | tr -d ' ')
+			as_user "screen -p 0 -S $SCREENID -X stuff $'/pm $1 GALACTIC BANK - Your faction has $BALANCECREDITS credits\n'"
+		else
+			as_user "screen -p 0 -S $SCREENID -X stuff $'/pm $1 GALACTIC BANK - You are not in a faction\n'"
+		fi
+	fi
+}
+function COMMAND_VOTEEXCHANGE(){
+#Converts the specified number of voting points into credits at the rate of 1,000,000 credits per vote
+#USAGE: !VOTEEXCHANGE <Amount>
+	if [ "$#" -ne "2" ]
+	then
+		as_user "screen -p 0 -S $SCREENID -X stuff $'/pm $1 Invalid parameters. Please use !VOTEEXCHANGE <Amount>\n'"
+	else
+		if [ $2 -gt 0 ] 2>/dev/null
+		then
+			BALANCECREDITS=$(grep CreditsInBank $PLAYERFILE/$1 | cut -d= -f2 | tr -d ' ')
+			VOTEBALANCE=$(grep "VotingPoints=" $PLAYERFILE/$1 | cut -d= -f2)
+			if [ $VOTEBALANCE -ge $2 ]
+			then
+				NEWVOTE=$(($VOTEBALANCE - $2))
+				NEWCREDITS=$(($BALANCECREDITS + $CREDITSPERVOTE * $2))
+				as_user "sed -i 's/CreditsInBank=.*/CreditsInBank=$NEWCREDITS/g' $PLAYERFILE/$1"
+				as_user "sed -i 's/VotingPoints=.*/VotingPoints=$NEWVOTE/g' $PLAYERFILE/$1"
+				as_user "screen -p 0 -S $SCREENID -X stuff $'/pm $1 You traded in $2 voting points for $(($BALANCECREDITS + $CREDITSPERVOTE * $2)) credits. The credits have been sent to your bank account.\n'"
+			else
+				as_user "screen -p 0 -S $SCREENID -X stuff $'/pm $1 You dont have enough voting points to do that! You only have $VOTEBALANCE voting points\n'"
+			fi
+		else
+			as_user "screen -p 0 -S $SCREENID -X stuff $'/pm $1 Invalid amount entered. Please only use positive whole numbers.\n'"
+		fi
 	fi
 }
 
@@ -2549,17 +3624,17 @@ function COMMAND_CONFIRM(){
 	then
 		as_user "screen -p 0 -S $SCREENID -X stuff $'/pm $1 Invalid parameters. Please use !CONFIRM\n'"
 	else
-		as_user "sed -i 's/CommandConfirm: .*/CommandConfirm: 1/g' $PLAYERFILE/$1"
+		as_user "sed -i 's/CommandConfirm=.*/CommandConfirm=1/g' $PLAYERFILE/$1"
 		as_user "screen -p 0 -S $SCREENID -X stuff $'/pm $1 Commands confirmed for the next 20 seconds!\n'"
 		sleep 20
 		as_user "screen -p 0 -S $SCREENID -X stuff $'/pm $1 Commands are no longer confirmed!\n'"
-		as_user "sed -i 's/CommandConfirm: 1/CommandConfirm: 0/g' $PLAYERFILE/$1"
+		as_user "sed -i 's/CommandConfirm=1/CommandConfirm=0/g' $PLAYERFILE/$1"
 	fi
 }
 function COMMAND_VOTEBALANCE(){ 
 #Tells you how many voting points you have saved up
 #USAGE: !VOTEBALANCE
-	as_user "screen -p 0 -S $SCREENID -X stuff $'/pm $1 You have $(grep "VotingPoints:" $PLAYERFILE/$1 | cut -d":" -f2 | tr -d " " ) votes to spend!\n'"
+	as_user "screen -p 0 -S $SCREENID -X stuff $'/pm $1 You have $(grep "VotingPoints=" $PLAYERFILE/$1 | cut -d= -f2 | tr -d " " ) votes to spend!\n'"
 }
 
 #Utility Commands
@@ -2855,104 +3930,307 @@ function COMMAND_GIVE(){
 		fi
 	fi
 }
-function COMMAND_GIVENORMAL(){
-#Gives you the normal hull block kit
-#USAGE: !GIVENORMAL
-	if [ "$#" -ne "1" ]
+function COMMAND_GIVESET() {
+#Give complete build set of different hulls, ship internals, and decorations
+#USAGE: !GIVESET <Set name> <Set type (only used for normal or hard hull)> - Set names are grey, white, black, red, blue, yellow, green, brown, purple, glass, light, weapon, internal, decoration, terrain, plants
+if [ "$#" -ne "2" ] && [ "$#" -ne "3" ]
+then
+	as_user "screen -p 0 -S $SCREENID -X stuff $'/pm $1 Invalid parameters. Please use !GIVESET <Set name> <Set type (only used for normal or hard hull)> - Set names are grey, white, black, red, blue, yellow, green, brown, purple, glass, light, weapon, internal, decoration, terrain, plants\n'"
+else
+	case "$2" in
+	*"glass"*) 
+	as_user "screen -p 0 -S $SCREENID -X stuff $'/giveid $1 63 10000\n'"
+	as_user "screen -p 0 -S $SCREENID -X stuff $'/giveid $1 329 10000\n'"
+	as_user "screen -p 0 -S $SCREENID -X stuff $'/giveid $1 330 10000\n'"
+	as_user "screen -p 0 -S $SCREENID -X stuff $'/giveid $1 368 10000\n'"
+	as_user "screen -p 0 -S $SCREENID -X stuff $'/giveid $1 367 10000\n'"
+	;;
+	*"light"*) 
+	as_user "screen -p 0 -S $SCREENID -X stuff $'/giveid $1 65 10000\n'"
+	as_user "screen -p 0 -S $SCREENID -X stuff $'/giveid $1 62 10000\n'"
+	as_user "screen -p 0 -S $SCREENID -X stuff $'/giveid $1 282 10000\n'"
+	as_user "screen -p 0 -S $SCREENID -X stuff $'/giveid $1 283 10000\n'"
+	as_user "screen -p 0 -S $SCREENID -X stuff $'/giveid $1 284 10000\n'"
+	as_user "screen -p 0 -S $SCREENID -X stuff $'/giveid $1 285 10000\n'"
+	;;
+	*"weapon"*)
+	as_user "screen -p 0 -S $SCREENID -X stuff $'/giveid $1 6 10000\n'"
+	as_user "screen -p 0 -S $SCREENID -X stuff $'/giveid $1 16 10000\n'"
+	as_user "screen -p 0 -S $SCREENID -X stuff $'/giveid $1 4 10000\n'"
+	as_user "screen -p 0 -S $SCREENID -X stuff $'/giveid $1 24 10000\n'"
+	as_user "screen -p 0 -S $SCREENID -X stuff $'/giveid $1 39 10000\n'"
+	as_user "screen -p 0 -S $SCREENID -X stuff $'/giveid $1 30 10000\n'"
+	as_user "screen -p 0 -S $SCREENID -X stuff $'/giveid $1 38 10000\n'"
+	as_user "screen -p 0 -S $SCREENID -X stuff $'/giveid $1 32 10000\n'"
+	as_user "screen -p 0 -S $SCREENID -X stuff $'/giveid $1 46 10000\n'"
+	as_user "screen -p 0 -S $SCREENID -X stuff $'/giveid $1 40 10000\n'"
+	as_user "screen -p 0 -S $SCREENID -X stuff $'/giveid $1 54 10000\n'"
+	as_user "screen -p 0 -S $SCREENID -X stuff $'/giveid $1 48 10000\n'"
+	as_user "screen -p 0 -S $SCREENID -X stuff $'/giveid $1 344 10000\n'"
+	as_user "screen -p 0 -S $SCREENID -X stuff $'/giveid $1 345 10000\n'"
+	as_user "screen -p 0 -S $SCREENID -X stuff $'/giveid $1 14 10000\n'"
+	as_user "screen -p 0 -S $SCREENID -X stuff $'/giveid $1 334 10000\n'"
+	as_user "screen -p 0 -S $SCREENID -X stuff $'/giveid $1 335 10000\n'"
+	as_user "screen -p 0 -S $SCREENID -X stuff $'/giveid $1 332 10000\n'"
+	as_user "screen -p 0 -S $SCREENID -X stuff $'/giveid $1 333 10000\n'"
+	;;
+	*"terrain"*) 
+	as_user "screen -p 0 -S $SCREENID -X stuff $'/giveid $1 64 10000\n'"
+	as_user "screen -p 0 -S $SCREENID -X stuff $'/giveid $1 80 10000\n'"
+	as_user "screen -p 0 -S $SCREENID -X stuff $'/giveid $1 73 10000\n'"
+	as_user "screen -p 0 -S $SCREENID -X stuff $'/giveid $1 74 10000\n'"
+	as_user "screen -p 0 -S $SCREENID -X stuff $'/giveid $1 87 10000\n'"
+	as_user "screen -p 0 -S $SCREENID -X stuff $'/giveid $1 285 10000\n'"
+	as_user "screen -p 0 -S $SCREENID -X stuff $'/giveid $1 138 10000\n'"
+	as_user "screen -p 0 -S $SCREENID -X stuff $'/giveid $1 141 10000\n'"
+	as_user "screen -p 0 -S $SCREENID -X stuff $'/giveid $1 91 10000\n'"
+	as_user "screen -p 0 -S $SCREENID -X stuff $'/giveid $1 107 10000\n'"
+	as_user "screen -p 0 -S $SCREENID -X stuff $'/giveid $1 82 10000\n'"
+	as_user "screen -p 0 -S $SCREENID -X stuff $'/giveid $1 83 10000\n'"
+	as_user "screen -p 0 -S $SCREENID -X stuff $'/giveid $1 139 10000\n'"
+	as_user "screen -p 0 -S $SCREENID -X stuff $'/giveid $1 140 10000\n'"
+	as_user "screen -p 0 -S $SCREENID -X stuff $'/giveid $1 86 10000\n'"
+	as_user "screen -p 0 -S $SCREENID -X stuff $'/giveid $1 274 10000\n'"
+	as_user "screen -p 0 -S $SCREENID -X stuff $'/giveid $1 275 10000\n'"
+	as_user "screen -p 0 -S $SCREENID -X stuff $'/giveid $1 278 10000\n'"
+	as_user "screen -p 0 -S $SCREENID -X stuff $'/giveid $1 279 10000\n'"
+	as_user "screen -p 0 -S $SCREENID -X stuff $'/giveid $1 270 10000\n'"
+	as_user "screen -p 0 -S $SCREENID -X stuff $'/giveid $1 286 10000\n'"
+	;;
+	*"plant"*) 
+	as_user "screen -p 0 -S $SCREENID -X stuff $'/giveid $1 89 10000\n'"
+	as_user "screen -p 0 -S $SCREENID -X stuff $'/giveid $1 90 10000\n'"
+	as_user "screen -p 0 -S $SCREENID -X stuff $'/giveid $1 91 10000\n'"
+	as_user "screen -p 0 -S $SCREENID -X stuff $'/giveid $1 92 10000\n'"
+	as_user "screen -p 0 -S $SCREENID -X stuff $'/giveid $1 93 10000\n'"
+	as_user "screen -p 0 -S $SCREENID -X stuff $'/giveid $1 95 10000\n'"
+	as_user "screen -p 0 -S $SCREENID -X stuff $'/giveid $1 96 10000\n'"
+	as_user "screen -p 0 -S $SCREENID -X stuff $'/giveid $1 97 10000\n'"
+	as_user "screen -p 0 -S $SCREENID -X stuff $'/giveid $1 98 10000\n'"
+	as_user "screen -p 0 -S $SCREENID -X stuff $'/giveid $1 99 10000\n'"
+	as_user "screen -p 0 -S $SCREENID -X stuff $'/giveid $1 100 10000\n'"
+	as_user "screen -p 0 -S $SCREENID -X stuff $'/giveid $1 101 10000\n'"
+	as_user "screen -p 0 -S $SCREENID -X stuff $'/giveid $1 102 10000\n'"
+	as_user "screen -p 0 -S $SCREENID -X stuff $'/giveid $1 103 10000\n'"
+	as_user "screen -p 0 -S $SCREENID -X stuff $'/giveid $1 104 10000\n'"
+	as_user "screen -p 0 -S $SCREENID -X stuff $'/giveid $1 105 10000\n'"
+	as_user "screen -p 0 -S $SCREENID -X stuff $'/giveid $1 106 10000\n'"
+	as_user "screen -p 0 -S $SCREENID -X stuff $'/giveid $1 108 10000\n'"
+	as_user "screen -p 0 -S $SCREENID -X stuff $'/giveid $1 109 10000\n'"
+	as_user "screen -p 0 -S $SCREENID -X stuff $'/giveid $1 84 10000\n'"
+	as_user "screen -p 0 -S $SCREENID -X stuff $'/giveid $1 85 10000\n'"
+	as_user "screen -p 0 -S $SCREENID -X stuff $'/giveid $1 276 10000\n'"
+	as_user "screen -p 0 -S $SCREENID -X stuff $'/giveid $1 277 10000\n'"
+	as_user "screen -p 0 -S $SCREENID -X stuff $'/giveid $1 280 10000\n'"
+	as_user "screen -p 0 -S $SCREENID -X stuff $'/giveid $1 281 10000\n'"
+	as_user "screen -p 0 -S $SCREENID -X stuff $'/giveid $1 287 10000\n'"
+	as_user "screen -p 0 -S $SCREENID -X stuff $'/giveid $1 288 10000\n'"
+	;;
+	*"decoration"*) 
+	as_user "screen -p 0 -S $SCREENID -X stuff $'/giveid $1 340 10000\n'"
+	as_user "screen -p 0 -S $SCREENID -X stuff $'/giveid $1 336 10000\n'"
+	as_user "screen -p 0 -S $SCREENID -X stuff $'/giveid $1 337 10000\n'"
+	as_user "screen -p 0 -S $SCREENID -X stuff $'/giveid $1 338 10000\n'"
+	as_user "screen -p 0 -S $SCREENID -X stuff $'/giveid $1 339 10000\n'"
+	as_user "screen -p 0 -S $SCREENID -X stuff $'/giveid $1 272 10000\n'"
+	as_user "screen -p 0 -S $SCREENID -X stuff $'/giveid $1 273 10000\n'"
+	as_user "screen -p 0 -S $SCREENID -X stuff $'/giveid $1 254 10000\n'"
+	;;
+	*"internal"*) 
+	as_user "screen -p 0 -S $SCREENID -X stuff $'/giveid $1 289 10000\n'"
+	as_user "screen -p 0 -S $SCREENID -X stuff $'/giveid $1 290 10000\n'"
+	as_user "screen -p 0 -S $SCREENID -X stuff $'/giveid $1 7 10000\n'"
+	as_user "screen -p 0 -S $SCREENID -X stuff $'/giveid $1 56 10000\n'"
+	as_user "screen -p 0 -S $SCREENID -X stuff $'/giveid $1 120 10000\n'"
+	as_user "screen -p 0 -S $SCREENID -X stuff $'/giveid $1 122 10000\n'"
+	as_user "screen -p 0 -S $SCREENID -X stuff $'/giveid $1 2 10000\n'"
+	as_user "screen -p 0 -S $SCREENID -X stuff $'/giveid $1 291 10000\n'"
+	as_user "screen -p 0 -S $SCREENID -X stuff $'/giveid $1 292 10000\n'"
+	as_user "screen -p 0 -S $SCREENID -X stuff $'/giveid $1 331 10000\n'"
+	as_user "screen -p 0 -S $SCREENID -X stuff $'/giveid $1 346 10000\n'"
+	as_user "screen -p 0 -S $SCREENID -X stuff $'/giveid $1 101 10000\n'"
+	as_user "screen -p 0 -S $SCREENID -X stuff $'/giveid $1 1 10000\n'"
+	as_user "screen -p 0 -S $SCREENID -X stuff $'/giveid $1 22 10000\n'"
+	as_user "screen -p 0 -S $SCREENID -X stuff $'/giveid $1 15 10000\n'"
+	as_user "screen -p 0 -S $SCREENID -X stuff $'/giveid $1 8 10000\n'"
+	as_user "screen -p 0 -S $SCREENID -X stuff $'/giveid $1 3 10000\n'"
+	as_user "screen -p 0 -S $SCREENID -X stuff $'/giveid $1 47 10000\n'"
+	as_user "screen -p 0 -S $SCREENID -X stuff $'/giveid $1 121 10000\n'"
+	as_user "screen -p 0 -S $SCREENID -X stuff $'/giveid $1 94 10000\n'"
+	as_user "screen -p 0 -S $SCREENID -X stuff $'/giveid $1 347 10000\n'"
+	;;
+	*"grey"*) 
+	if [ "$3" = "normal" ]
 	then
-		as_user "screen -p 0 -S $SCREENID -X stuff $'/pm $1 Invalid parameters. Please use !GIVENORMAL\n'"
-	else
 		as_user "screen -p 0 -S $SCREENID -X stuff $'/giveid $1 5 10000\n'"
 		as_user "screen -p 0 -S $SCREENID -X stuff $'/giveid $1 293 10000\n'"
+		as_user "screen -p 0 -S $SCREENID -X stuff $'/giveid $1 302 10000\n'"
+		as_user "screen -p 0 -S $SCREENID -X stuff $'/giveid $1 348 10000\n'"
+		as_user "screen -p 0 -S $SCREENID -X stuff $'/giveid $1 357 10000\n'"
+	elif [ "$3" = "hard" ]
+	then
+		as_user "screen -p 0 -S $SCREENID -X stuff $'/giveid $1 311 10000\n'"
+		as_user "screen -p 0 -S $SCREENID -X stuff $'/giveid $1 320 10000\n'"
+		as_user "screen -p 0 -S $SCREENID -X stuff $'/giveid $1 263 10000\n'"
+		as_user "screen -p 0 -S $SCREENID -X stuff $'/giveid $1 401 10000\n'"
+		as_user "screen -p 0 -S $SCREENID -X stuff $'/giveid $1 402 10000\n'"
+	else
+		as_user "screen -p 0 -S $SCREENID -X stuff $'/pm $1 Invalid parameters. Please use normal or hard for example GIVESET <color of hull> <normal or hard>\n'"
+	fi
+	;;
+	*"white"*) 
+	if [ "$3" = "normal" ]
+	then
 		as_user "screen -p 0 -S $SCREENID -X stuff $'/giveid $1 81 10000\n'"
 		as_user "screen -p 0 -S $SCREENID -X stuff $'/giveid $1 301 10000\n'"
+		as_user "screen -p 0 -S $SCREENID -X stuff $'/giveid $1 310 10000\n'"
+		as_user "screen -p 0 -S $SCREENID -X stuff $'/giveid $1 400 10000\n'"
+		as_user "screen -p 0 -S $SCREENID -X stuff $'/giveid $1 392 10000\n'"
+	elif [ "$3" = "hard" ]
+	then
+		as_user "screen -p 0 -S $SCREENID -X stuff $'/giveid $1 319 10000\n'"
+		as_user "screen -p 0 -S $SCREENID -X stuff $'/giveid $1 328 10000\n'"
+		as_user "screen -p 0 -S $SCREENID -X stuff $'/giveid $1 384 10000\n'"
+		as_user "screen -p 0 -S $SCREENID -X stuff $'/giveid $1 376 10000\n'"
+		as_user "screen -p 0 -S $SCREENID -X stuff $'/giveid $1 271 10000\n'"
+	else
+		as_user "screen -p 0 -S $SCREENID -X stuff $'/pm $1 Invalid parameters. Please use normal or hard for example GIVESET <color of hull> <normal or hard>\n'"
+	fi
+	;;
+	*"black"*) 
+	if [ "$3" = "normal" ]
+	then
 		as_user "screen -p 0 -S $SCREENID -X stuff $'/giveid $1 75 10000\n'"
 		as_user "screen -p 0 -S $SCREENID -X stuff $'/giveid $1 296 10000\n'"
-		as_user "screen -p 0 -S $SCREENID -X stuff $'/giveid $1 76 10000\n'"
-		as_user "screen -p 0 -S $SCREENID -X stuff $'/giveid $1 297 10000\n'"
-		as_user "screen -p 0 -S $SCREENID -X stuff $'/giveid $1 77 10000\n'"
-		as_user "screen -p 0 -S $SCREENID -X stuff $'/giveid $1 298 10000\n'"
-		as_user "screen -p 0 -S $SCREENID -X stuff $'/giveid $1 78 10000\n'"
-		as_user "screen -p 0 -S $SCREENID -X stuff $'/giveid $1 299 10000\n'"
-		as_user "screen -p 0 -S $SCREENID -X stuff $'/giveid $1 79 10000\n'"
-		as_user "screen -p 0 -S $SCREENID -X stuff $'/giveid $1 300 10000\n'"
-		as_user "screen -p 0 -S $SCREENID -X stuff $'/giveid $1 70 10000\n'"
-		as_user "screen -p 0 -S $SCREENID -X stuff $'/giveid $1 295 10000\n'"
-		as_user "screen -p 0 -S $SCREENID -X stuff $'/giveid $1 69 10000\n'"
-		as_user "screen -p 0 -S $SCREENID -X stuff $'/giveid $1 294 10000\n'"
-# End of hulls
-		as_user "screen -p 0 -S $SCREENID -X stuff $'/giveid $1 63 10000\n'"
-		as_user "screen -p 0 -S $SCREENID -X stuff $'/giveid $1 329 10000\n'"
-		as_user "screen -p 0 -S $SCREENID -X stuff $'/giveid $1 289 10000\n'"
-		as_user "screen -p 0 -S $SCREENID -X stuff $'/giveid $1 290 10000\n'"
-		as_user "screen -p 0 -S $SCREENID -X stuff $'/giveid $1 7 10000\n'"
-		as_user "screen -p 0 -S $SCREENID -X stuff $'/giveid $1 88 10000\n'"
-		as_user "screen -p 0 -S $SCREENID -X stuff $'/giveid $1 55 10000\n'"
-		as_user "screen -p 0 -S $SCREENID -X stuff $'/giveid $1 62 10000\n'"
-		as_user "screen -p 0 -S $SCREENID -X stuff $'/giveid $1 282 10000\n'"
-		as_user "screen -p 0 -S $SCREENID -X stuff $'/giveid $1 283 10000\n'"
-		as_user "screen -p 0 -S $SCREENID -X stuff $'/giveid $1 284 10000\n'"
-		as_user "screen -p 0 -S $SCREENID -X stuff $'/giveid $1 285 10000\n'"
-		as_user "screen -p 0 -S $SCREENID -X stuff $'/giveid $1 123 10000\n'"
-		as_user "screen -p 0 -S $SCREENID -X stuff $'/giveid $1 122 10000\n'"
-		as_user "screen -p 0 -S $SCREENID -X stuff $'/giveid $1 2 10000\n'"
-		as_user "screen -p 0 -S $SCREENID -X stuff $'/giveid $1 331 10000\n'"
-		as_user "screen -p 0 -S $SCREENID -X stuff $'/giveid $1 1 10000\n'"
-		as_user "screen -p 0 -S $SCREENID -X stuff $'/giveid $1 3 10000\n'"
-		as_user "screen -p 0 -S $SCREENID -X stuff $'/giveid $1 8 10000\n'"
-		as_user "screen -p 0 -S $SCREENID -X stuff $'/giveid $1 47 10000\n'"
-		as_user "screen -p 0 -S $SCREENID -X stuff $'/giveid $1 6 10000\n'"
-		as_user "screen -p 0 -S $SCREENID -X stuff $'/giveid $1 16 10000\n'"
-	fi
-}
-function COMMAND_GIVEHARD(){
-#Gives you the Hardened hull block kit
-#USAGE: !GIVEHARD
-	if [ "$#" -ne "1" ]
+		as_user "screen -p 0 -S $SCREENID -X stuff $'/giveid $1 305 10000\n'"
+		as_user "screen -p 0 -S $SCREENID -X stuff $'/giveid $1 393 10000\n'"
+		as_user "screen -p 0 -S $SCREENID -X stuff $'/giveid $1 385 10000\n'"
+	elif [ "$3" = "hard" ]
 	then
-		as_user "screen -p 0 -S $SCREENID -X stuff $'/pm $1 Invalid parameters. Please use !GIVEHARD\n'"
-	else	
-		as_user "screen -p 0 -S $SCREENID -X stuff $'/giveid $1 263 10000\n'"
-		as_user "screen -p 0 -S $SCREENID -X stuff $'/giveid $1 311 10000\n'"
-		as_user "screen -p 0 -S $SCREENID -X stuff $'/giveid $1 271 10000\n'"
-		as_user "screen -p 0 -S $SCREENID -X stuff $'/giveid $1 319 10000\n'"
 		as_user "screen -p 0 -S $SCREENID -X stuff $'/giveid $1 264 10000\n'"
 		as_user "screen -p 0 -S $SCREENID -X stuff $'/giveid $1 312 10000\n'"
-		as_user "screen -p 0 -S $SCREENID -X stuff $'/giveid $1 267 10000\n'"
-		as_user "screen -p 0 -S $SCREENID -X stuff $'/giveid $1 315 10000\n'"
-		as_user "screen -p 0 -S $SCREENID -X stuff $'/giveid $1 270 10000\n'"
-		as_user "screen -p 0 -S $SCREENID -X stuff $'/giveid $1 318 10000\n'"
-		as_user "screen -p 0 -S $SCREENID -X stuff $'/giveid $1 268 10000\n'"
-		as_user "screen -p 0 -S $SCREENID -X stuff $'/giveid $1 316 10000\n'"
-		as_user "screen -p 0 -S $SCREENID -X stuff $'/giveid $1 269 10000\n'"
-		as_user "screen -p 0 -S $SCREENID -X stuff $'/giveid $1 317 10000\n'"
-		as_user "screen -p 0 -S $SCREENID -X stuff $'/giveid $1 266 10000\n'"
-		as_user "screen -p 0 -S $SCREENID -X stuff $'/giveid $1 314 10000\n'"
+		as_user "screen -p 0 -S $SCREENID -X stuff $'/giveid $1 321 10000\n'"
+		as_user "screen -p 0 -S $SCREENID -X stuff $'/giveid $1 377 10000\n'"
+		as_user "screen -p 0 -S $SCREENID -X stuff $'/giveid $1 369 10000\n'"
+	else
+		as_user "screen -p 0 -S $SCREENID -X stuff $'/pm $1 Invalid parameters. Please use normal or hard for example GIVESET <color of hull> <normal or hard>\n'"
+	fi
+	;;
+	*"red"*) 
+	if [ "$3" = "normal" ]
+	then
+		as_user "screen -p 0 -S $SCREENID -X stuff $'/giveid $1 76 10000\n'"
+		as_user "screen -p 0 -S $SCREENID -X stuff $'/giveid $1 297 10000\n'"
+		as_user "screen -p 0 -S $SCREENID -X stuff $'/giveid $1 306 10000\n'"
+		as_user "screen -p 0 -S $SCREENID -X stuff $'/giveid $1 394 10000\n'"
+		as_user "screen -p 0 -S $SCREENID -X stuff $'/giveid $1 386 10000\n'"
+	elif [ "$3" = "hard" ]
+	then
 		as_user "screen -p 0 -S $SCREENID -X stuff $'/giveid $1 265 10000\n'"
 		as_user "screen -p 0 -S $SCREENID -X stuff $'/giveid $1 313 10000\n'"
-# End of hulls
-		as_user "screen -p 0 -S $SCREENID -X stuff $'/giveid $1 63 10000\n'"
-		as_user "screen -p 0 -S $SCREENID -X stuff $'/giveid $1 329 10000\n'"
-		as_user "screen -p 0 -S $SCREENID -X stuff $'/giveid $1 289 10000\n'"
-		as_user "screen -p 0 -S $SCREENID -X stuff $'/giveid $1 290 10000\n'"
-		as_user "screen -p 0 -S $SCREENID -X stuff $'/giveid $1 7 10000\n'"
-		as_user "screen -p 0 -S $SCREENID -X stuff $'/giveid $1 88 10000\n'"
-		as_user "screen -p 0 -S $SCREENID -X stuff $'/giveid $1 55 10000\n'"
-		as_user "screen -p 0 -S $SCREENID -X stuff $'/giveid $1 62 10000\n'"
-		as_user "screen -p 0 -S $SCREENID -X stuff $'/giveid $1 282 10000\n'"
-		as_user "screen -p 0 -S $SCREENID -X stuff $'/giveid $1 283 10000\n'"
-		as_user "screen -p 0 -S $SCREENID -X stuff $'/giveid $1 284 10000\n'"
-		as_user "screen -p 0 -S $SCREENID -X stuff $'/giveid $1 285 10000\n'"
-		as_user "screen -p 0 -S $SCREENID -X stuff $'/giveid $1 123 10000\n'"
-		as_user "screen -p 0 -S $SCREENID -X stuff $'/giveid $1 122 10000\n'"
-		as_user "screen -p 0 -S $SCREENID -X stuff $'/giveid $1 2 10000\n'"
-		as_user "screen -p 0 -S $SCREENID -X stuff $'/giveid $1 331 10000\n'"
-		as_user "screen -p 0 -S $SCREENID -X stuff $'/giveid $1 1 10000\n'"
-		as_user "screen -p 0 -S $SCREENID -X stuff $'/giveid $1 3 10000\n'"
-		as_user "screen -p 0 -S $SCREENID -X stuff $'/giveid $1 8 10000\n'"
-		as_user "screen -p 0 -S $SCREENID -X stuff $'/giveid $1 47 10000\n'"
-		as_user "screen -p 0 -S $SCREENID -X stuff $'/giveid $1 6 10000\n'"
-		as_user "screen -p 0 -S $SCREENID -X stuff $'/giveid $1 16 10000\n'"
+		as_user "screen -p 0 -S $SCREENID -X stuff $'/giveid $1 322 10000\n'"
+		as_user "screen -p 0 -S $SCREENID -X stuff $'/giveid $1 378 10000\n'"
+		as_user "screen -p 0 -S $SCREENID -X stuff $'/giveid $1 370 10000\n'"
+	else
+		as_user "screen -p 0 -S $SCREENID -X stuff $'/pm $1 Invalid parameters. Please use normal or hard for example GIVESET <color of hull> <normal or hard>\n'"
+	fi
+	;;
+	*"yellow"*) 
+	if [ "$3" = "normal" ]
+	then
+		as_user "screen -p 0 -S $SCREENID -X stuff $'/giveid $1 79 10000\n'"
+		as_user "screen -p 0 -S $SCREENID -X stuff $'/giveid $1 300 10000\n'"
+		as_user "screen -p 0 -S $SCREENID -X stuff $'/giveid $1 309 10000\n'"
+		as_user "screen -p 0 -S $SCREENID -X stuff $'/giveid $1 398 10000\n'"
+		as_user "screen -p 0 -S $SCREENID -X stuff $'/giveid $1 391 10000\n'"
+	elif [ "$3" = "hard" ]
+	then
+		as_user "screen -p 0 -S $SCREENID -X stuff $'/giveid $1 270 10000\n'"
+		as_user "screen -p 0 -S $SCREENID -X stuff $'/giveid $1 318 10000\n'"
+		as_user "screen -p 0 -S $SCREENID -X stuff $'/giveid $1 327 10000\n'"
+		as_user "screen -p 0 -S $SCREENID -X stuff $'/giveid $1 383 10000\n'"
+		as_user "screen -p 0 -S $SCREENID -X stuff $'/giveid $1 375 10000\n'"
+	else
+		as_user "screen -p 0 -S $SCREENID -X stuff $'/pm $1 Invalid parameters. Please use normal or hard for example GIVESET <color of hull> <normal or hard>\n'"
+	fi
+	;;
+	*"green"*) 
+	if [ "$3" = "normal" ]
+	then
+		as_user "screen -p 0 -S $SCREENID -X stuff $'/giveid $1 79 10000\n'"
+		as_user "screen -p 0 -S $SCREENID -X stuff $'/giveid $1 299 10000\n'"
+		as_user "screen -p 0 -S $SCREENID -X stuff $'/giveid $1 308 10000\n'"
+		as_user "screen -p 0 -S $SCREENID -X stuff $'/giveid $1 397 10000\n'"
+		as_user "screen -p 0 -S $SCREENID -X stuff $'/giveid $1 389 10000\n'"
+	elif [ "$3" = "hard" ]
+	then
+		as_user "screen -p 0 -S $SCREENID -X stuff $'/giveid $1 268 10000\n'"
+		as_user "screen -p 0 -S $SCREENID -X stuff $'/giveid $1 316 10000\n'"
+		as_user "screen -p 0 -S $SCREENID -X stuff $'/giveid $1 325 10000\n'"
+		as_user "screen -p 0 -S $SCREENID -X stuff $'/giveid $1 381 10000\n'"
+		as_user "screen -p 0 -S $SCREENID -X stuff $'/giveid $1 373 10000\n'"
+	else
+		as_user "screen -p 0 -S $SCREENID -X stuff $'/pm $1 Invalid parameters. Please use normal or hard for example GIVESET <color of hull> <normal or hard>\n'"
+	fi
+	;;
+	*"brown"*) 
+	if [ "$3" = "normal" ]
+	then
+		as_user "screen -p 0 -S $SCREENID -X stuff $'/giveid $1 70 10000\n'"
+		as_user "screen -p 0 -S $SCREENID -X stuff $'/giveid $1 295 10000\n'"
+		as_user "screen -p 0 -S $SCREENID -X stuff $'/giveid $1 304 10000\n'"
+		as_user "screen -p 0 -S $SCREENID -X stuff $'/giveid $1 404 10000\n'"
+		as_user "screen -p 0 -S $SCREENID -X stuff $'/giveid $1 403 10000\n'"
+	elif [ "$3" = "hard" ]
+	then
+		as_user "screen -p 0 -S $SCREENID -X stuff $'/giveid $1 269 10000\n'"
+		as_user "screen -p 0 -S $SCREENID -X stuff $'/giveid $1 317 10000\n'"
+		as_user "screen -p 0 -S $SCREENID -X stuff $'/giveid $1 326 10000\n'"
+		as_user "screen -p 0 -S $SCREENID -X stuff $'/giveid $1 382 10000\n'"
+		as_user "screen -p 0 -S $SCREENID -X stuff $'/giveid $1 374 10000\n'"
+	else
+		as_user "screen -p 0 -S $SCREENID -X stuff $'/pm $1 Invalid parameters. Please use normal or hard for example GIVESET <color of hull> <normal or hard>\n'"
+	fi
+	;;
+		*"purple"*) 
+	if [ "$3" = "normal" ]
+	then
+		as_user "screen -p 0 -S $SCREENID -X stuff $'/giveid $1 69 10000\n'"
+		as_user "screen -p 0 -S $SCREENID -X stuff $'/giveid $1 294 10000\n'"
+		as_user "screen -p 0 -S $SCREENID -X stuff $'/giveid $1 303 10000\n'"
+		as_user "screen -p 0 -S $SCREENID -X stuff $'/giveid $1 395 10000\n'"
+		as_user "screen -p 0 -S $SCREENID -X stuff $'/giveid $1 387 10000\n'"
+	elif [ "$3" = "hard" ]
+	then
+		as_user "screen -p 0 -S $SCREENID -X stuff $'/giveid $1 266 10000\n'"
+		as_user "screen -p 0 -S $SCREENID -X stuff $'/giveid $1 314 10000\n'"
+		as_user "screen -p 0 -S $SCREENID -X stuff $'/giveid $1 323 10000\n'"
+		as_user "screen -p 0 -S $SCREENID -X stuff $'/giveid $1 379 10000\n'"
+		as_user "screen -p 0 -S $SCREENID -X stuff $'/giveid $1 371 10000\n'"
+	else
+		as_user "screen -p 0 -S $SCREENID -X stuff $'/pm $1 Invalid parameters. Please use normal or hard for example GIVESET <color of hull> <normal or hard>\n'"
+	fi
+	;;
+	*) 
+	;;
+	esac
+fi
+}
+function COMMAND_GIVEMETA(){ 
+#Gives you, or another player the specified meta item
+#USAGE: !GIVEMETA <Player (optional)> <METAUTEN>
+	if [ "$#" -ne "2" ] && [ "$#" -ne "3" ]
+	then
+		as_user "screen -p 0 -S $SCREENID -X stuff $'/pm $1 Invalid parameters. Please use !GIVE <Playername (optional)> <Metaitem>\n'"
+	else
+		if [ "$#" -eq "2" ] 2>/dev/null
+		then
+			as_user "screen -p 0 -S $SCREENID -X stuff $'/give_metaitem $1 $2\n'"
+			as_user "screen -p 0 -S $SCREENID -X stuff $'/pm $1 You received $2\n'"
+		else
+			as_user "screen -p 0 -S $SCREENID -X stuff $'/give_metaitem $2 $3\n'"
+			as_user "screen -p 0 -S $SCREENID -X stuff $'/pm $1 $2 received $3\n'"
+		fi
 	fi
 }
 function COMMAND_CLEAR(){
@@ -3153,7 +4431,7 @@ function COMMAND_ADMINCOOLDOWN(){
 	else
 		if ! grep -q $3 $PLAYERFILE/$2
 		then
-			as_user "sed -i 's/JumpDisabled: .*/JumpDisabled: 0/g' $PLAYERFILE/$2"
+			as_user "sed -i 's/JumpDisabled=.*/JumpDisabled=0/g' $PLAYERFILE/$2"
 			as_user "sed -i 's/PlayerLastCore: .*/PlayerLastCore: 0/g' $PLAYERFILE/$2"
 			as_user "sed -i 's/PlayerLastFold: .*/PlayerLastFold: 0/g' $PLAYERFILE/$2"
 			as_user "screen -p 0 -S $SCREENID -X stuff $'/pm $1 All cooldowns set to 0 for $2\n'"
@@ -3199,6 +4477,9 @@ function COMMAND_THREADDUMP(){
 		as_user "screen -p 0 -S $SCREENID -X stuff $'/pm $1 The current java process has been exported to logs/threaddump$(date +%H%M%S.%N).log\n'"
 	fi
 }
+
+#------------------------------Start of daemon script-----------------------------------------
+sm_config
 
 # End of regular Functions and the beginning of alias for commands, custom functions, and finally functions that use arguments. 
 case "$1" in
@@ -3268,6 +4549,9 @@ ban)
 dump)
 	sm_dump $@
 	;;
+uptest)
+	update_file $@
+	;;
 help)
 	sm_help
 	;;
@@ -3296,16 +4580,17 @@ upgradestar)
 	sm_start
 	sm_cronrestore
 	;;
+updatefiles)
+	update_daemon
+	;;
 *)
-echo "Doomsider's and Titanmasher's Starmade Daemon (DSD) V.16"
-echo "Usage: starmaded.sh {help|start|stop|ebrake|install|reinstall|restore|status|destroy|restart|upgrade|upgradestar|smdo|smsay|cronstop|cronbackup|cronrestore|backup|backupstar|setplayermax|detect|log|screenlog|check|precheck|ban|dump}"
+echo "Doomsider's and Titanmasher's Starmade Daemon (DSD) V.17"
+echo "Usage: starmaded.sh {help|updatefiles|start|stop|ebrake|install|reinstall|restore|status|destroy|restart|upgrade|upgradestar|smdo|smsay|cronstop|cronbackup|cronrestore|backup|backupstar|setplayermax|detect|log|screenlog|check|precheck|ban|dump}"
 #******************************************************************************
 exit 1
 ;;
 esac
 exit 0
-# Notes:  When executing smdo and smsay with any special character you may need to use ' ' to enclose and possibly \ to breakout of special characters
+# Notes:  When executing smdo and smsay enclose in "" and escape any special characters
 # All chat commands require a ! in front of them and the commands are always in caps
-# The new ranking system uses RANKME to see rank for user and commands.  RANKLIST to see all the ranks.  RANKSET to set a rank for a user 
-# RANKUSER to see a users Rank.   
-# Ranks and their associated commands are contained in /home/user/logs/rankcommands.log
+
