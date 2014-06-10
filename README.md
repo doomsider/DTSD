@@ -62,9 +62,9 @@ Captain - Mid level Admin with some restrictions
 Admiral - Full Admin
 
 Scripting
-[SPOILER="Scripting for Starmaded"]
+
 Due to the way Starmaded is coded, it is very easy to adapt and expand upon. There are a number of places you can insert code to be run at specific times with little to no editing of existing code
-[SPOILER="Adding new commands"]
+
 All chat commands are handled by the log_chatcommands function, and It does this in a rather clever way.
 To add in new chat commands, all you need to do is create a new function called COMMAND_<CommandName> and then every time someone enters the new command name into the chat, preceded by an ! your new function will be called.
 e.g. if you created a function COMMAND_TEST then if anyone entered !TEST into chat then your function would be called
@@ -74,12 +74,12 @@ $2+ = The parameters the player passed, seperated by spaces.
 $# = The number of parameters passed (Including the players name)
 $@ = every single parameter passed (Including the players name)
 Using $# then, you can limit the number of parameters allowed to be passed to that command. In the default script, the following format is used to limit the number of parameters passed;
-[QUOTE]if [ "$#" -ne "NumberOfParameters+1" ]
+if [ "$#" -ne "NumberOfParameters+1" ]
 then
    as_user "screen -p 0 -S $SCREENID -X stuff $'/pm $1 ParameterErrorMessage\n'"
 else
    Function workings
-fi[/QUOTE]
+fi
 However you can do it any way you like.
 There is also integration into the help system for functions too. To use this, all you have to do is make the first two lines of your command be comments with info on how to use the command.
 To see this in the actual script, there is an example command located on line 1604 of the daemon, showing you how to use this
