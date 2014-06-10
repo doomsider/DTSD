@@ -735,7 +735,36 @@ create_rankscommands
 		done
 	done	
 }
-
+sm_box() {
+case "$2" in
+	*"green"*) 
+	if [ "$3" = "all" ]
+	then
+		as_user "screen -p 0 -S $SCREENID -X stuff $'/server_message_broadcast info $4\n'"
+	else
+		as_user "screen -p 0 -S $SCREENID -X stuff $'/server_message_to info $3 $4\n'"
+	fi
+	;;
+	*"blue"*)
+	if [ "$3" = "all" ]
+	then
+		as_user "screen -p 0 -S $SCREENID -X stuff $'/server_message_broadcast warning $4\n'"
+	else
+		as_user "screen -p 0 -S $SCREENID -X stuff $'/server_message_to warning $3 $4\n'"
+	fi
+	;;
+	*"red"*) 
+	if [ "$3" = "all" ]
+	then
+		as_user "screen -p 0 -S $SCREENID -X stuff $'/server_message_broadcast error $4\n'"
+	else
+		as_user "screen -p 0 -S $SCREENID -X stuff $'/server_message_to error $3 $4\n'"
+	fi
+	;;
+	*) 
+	;;
+	esac
+}
 #------------------------------Core logging functions-----------------------------------------
 
 log_playerinfo() { 
@@ -4692,6 +4721,9 @@ dump)
 	;;
 uptest)
 	update_file $@
+	;;
+box)
+	sm_box $@
 	;;
 help)
 	sm_help
