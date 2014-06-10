@@ -735,30 +735,110 @@ create_rankscommands
 		done
 	done	
 }
+parselog(){
+		SEARCHLOGIN="[SERVER][LOGIN] login received. returning login info for RegisteredClient: "
+		SEARCHREMOVE="[SERVER][DISCONNECT] Client 'RegisteredClient:"
+		SEARCHCHAT="[CHAT]"
+		SEARCHCHANGE="has players attached. Doing Sector Change for PlS"
+		SEARCHBUY="[BLUEPRINT][BUY]"
+		SEARCHBOARD="[CONTROLLER][ADD-UNIT]"
+		SEARCHDOCK="NOW REQUESTING DOCK FROM"
+		SEARCHUNDOCK="NOW UNDOCKING:"
+		SEARCHADMIN="[ADMIN COMMAND]"
+		SEARCHKILL="Announcing kill:"
+		SEARCHDESTROY="PERMANENTLY DELETING ENTITY:"
+		SEARCHINIT="SPAWNING NEW CHARACTER FOR PlS"
+		case "$@" in
+			*"$SEARCHLOGIN"*) 
+#				echo "Login detected"
+#				echo $@
+				log_on_login $@ &
+				;;
+			*"$SEARCHREMOVE"*) 
+#				echo "Remove detected"
+#				echo $@
+				log_playerlogout $@ &
+				;;
+ 			*"$SEARCHCHAT"*) 
+#				echo "Chat detected"
+#				echo $@
+				log_chatcommands $@ &
+				log_chatlogging $@ &
+				;;
+			*"$SEARCHCHANGE"*) 
+#				echo "Change detected"
+#				echo $@
+				log_sectorchange $@ &
+				;;
+			*"$SEARCHBUY"*) 
+#				echo "Buy detected"
+#				echo $@
+				log_shipbuy $@ &
+				;;
+			*"$SEARCHBOARD"*) 
+#				echo "Board detected"
+#				echo $@
+				log_boarding $@ &
+				;;
+			*"$SEARCHDOCK"*) 
+#				echo "Docking detected"
+#				echo $@
+				log_docking docking $@ &
+				;;
+			*"$SEARCHUNDOCK"*) 
+#				echo "Undocking detected"
+#				echo $@
+				log_docking undocking $@ &
+				;;
+			*"$SEARCHADMIN"*) 
+#				echo "Admin detected"
+#				echo $@
+				log_admincommand $@ &
+				;;
+			*"$SEARCHKILL"*) 
+#				echo "Kill detected"
+#				echo $@
+				log_kill $@ &
+				;;
+			*"$SEARCHDESTROY"*) 
+#				echo "Destroy detected"
+#				echo $@
+				log_destroystring $@ &
+				;;
+			*"$SEARCHINIT"*) 
+#				echo "Init detected"
+				log_initstring $@ &
+				;;
+			*) 
+				;;
+			esac
+}
 sm_box() {
+MESSAGE=${@:4}
+echo $MESSAGE
 case "$2" in
 	*"green"*) 
 	if [ "$3" = "all" ]
 	then
-		as_user "screen -p 0 -S $SCREENID -X stuff $'/server_message_broadcast info $4\n'"
+		as_user "screen -p 0 -S $SCREENID -X stuff $'/server_message_broadcast info \'$MESSAGE\'\n'"
 	else
-		as_user "screen -p 0 -S $SCREENID -X stuff $'/server_message_to info $3 $4\n'"
+		as_user "screen -p 0 -S $SCREENID -X stuff $'/server_message_to info $3 \'$MESSAGE\'\n'"
 	fi
 	;;
 	*"blue"*)
 	if [ "$3" = "all" ]
 	then
-		as_user "screen -p 0 -S $SCREENID -X stuff $'/server_message_broadcast warning $4\n'"
+		as_user "screen -p 0 -S $SCREENID -X stuff $'/server_message_broadcast warning \'$MESSAGE\'\n'"
 	else
-		as_user "screen -p 0 -S $SCREENID -X stuff $'/server_message_to warning $3 $4\n'"
+		as_user "screen -p 0 -S $SCREENID -X stuff $'/server_message_to warning $3 \'$MESSAGE\'\n'"
 	fi
 	;;
 	*"red"*) 
 	if [ "$3" = "all" ]
 	then
-		as_user "screen -p 0 -S $SCREENID -X stuff $'/server_message_broadcast error $4\n'"
+		as_user "screen -p 0 -S $SCREENID -X stuff $'/server_message_broadcast error \'$MESSAGE\'\n'"
 	else
-		as_user "screen -p 0 -S $SCREENID -X stuff $'/server_message_to error $3 $4\n'"
+		as_user "screen -p 0 -S $SCREENID -X stuff $'/server_message_to error $3 \'$MESSAGE\'\n'"
 	fi
 	;;
 	*) 
@@ -4755,6 +4835,10 @@ upgradestar)
 	;;
 updatefiles)
 	update_daemon
+	;;
+debug) 
+	echo ${@:2}
+	parselog ${@:2}
 	;;
 *)
 echo "Doomsider's and Titanmasher's Starmade Daemon (DSD) V.17"
