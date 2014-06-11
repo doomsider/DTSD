@@ -2230,7 +2230,7 @@ DLINE=$(grep -n -m 1 $1 $DAEMONPATH | cut -d : -f 1)
 #echo "This is the starting line for the write function $DLINE"
 let DLINE++
 EXTRACT=$(sed -n "${DLINE}p" $DAEMONPATH)
-echo "Here is the second line of write funtion $EXTRACT"
+# echo "Here is the second line of write funtion $EXTRACT"
 if [ "$#" -eq "2" ]
 then
 	PATHUPDATEFILE=$(echo $EXTRACT | cut -d$ -f2- | cut -d/  -f1)
@@ -2244,14 +2244,14 @@ else
 	PATHUPDATEFILE=${!PATHUPDATEFILE}
 	cp $PATHUPDATEFILE $PATHUPDATEFILE.old
 fi
-echo "This is the actual path to the file to be updated $PATHUPDATEFILE"
+# echo "This is the actual path to the file to be updated $PATHUPDATEFILE"
 #This is how you would compare files for future work ARRAY=( $(grep -n -Fxvf test1 test2) )
 OLD_IFS=$IFS
 IFS=$'\n'
 # Create an array of the old file
 OLDFILESTRING=( $(cat $PATHUPDATEFILE) )
 as_user "rm $PATHUPDATEFILE"
-# $1 is the write file function for the file being updated and if $3 is set it will use specific file
+# $1 is the write file function for the file being updated and if $2 is set it will use specific file
 $1 $2
 # Put the newly written file into an array
 NEWFILESTRING=( $(cat $PATHUPDATEFILE) )
@@ -2265,12 +2265,12 @@ do
 	OLDARRAY=0
 	while [ -n "${OLDFILESTRING[$OLDARRAY]+set}" ]
 	do
+	OLDSTR=${OLDFILESTRING[$OLDARRAY]}
 # If a = is detected grab the value to the right of = and then overwrite the new value
-	if [[ $NEWSTR == *=* ]]
+	if [[ $OLDSTR == *=* ]]
 	then
 		NEWVAR=${NEWSTR%=*}
 		NEWVAL=${NEWSTR##*=}
-		OLDSTR=${OLDFILESTRING[$OLDARRAY]}
 		OLDVAR=${OLDSTR%=*}
 		OLDVAL=${OLDSTR##*=}
 		if [ "$OLDVAR" = "$NEWVAR" ]
