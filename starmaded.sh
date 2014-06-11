@@ -58,7 +58,7 @@ else
 	USERNAME=$(whoami)
 	echo "Creating configuration file please edit configuration file (ie: starmade.cfg) or script may not function as intended"
 # The following creates the directories and configuration files
-	write_configpath
+	create_configpath
 	source $CONFIGPATH
 	sm_checkdir
 	create_tipfile
@@ -2182,6 +2182,12 @@ Logged in and you have an unread message? Try !MAIL LIST Unread
 Want to secretly use a command? Try using a command inside a PM to yourself!
 _EOF_"
 as_user "$CREATETIP"
+}
+create_configpath() {
+if [ ! -e $CONFIGPATH ]
+then
+	write_configpath
+fi
 }
 create_tipfile(){
 if [ ! -e $TIPFILE ]
