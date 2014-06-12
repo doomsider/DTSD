@@ -937,7 +937,7 @@ then
 	fi
 fi
 }
-log_chatcommands() { 
+log_chatcommands() { #Changed grep for playerrank to match = foramt
 # A big thanks to Titanmasher for his help with the Chat Commands.
 #echo "This was passed to chat commands $1"
 CHATGREP=$@
@@ -970,7 +970,7 @@ then
 #				echo "Here is the command with variables ${CCOMMAND[@]}"
 # 				Get the player rank from their log file
 # 				echo "looking for player rank"
-		PLAYERRANK=$(grep Rank: "$PLAYERFILE/$PLAYERCHATID" | cut -d" " -f2 | cut -d"[" -f2 | cut -d"]" -f1)
+		PLAYERRANK=$(grep Rank= "$PLAYERFILE/$PLAYERCHATID" | cut -d= -f2)
 # 	echo "$PLAYERRANK is the player rank"
 #				Find the allowed commands for the current player rank 
 # 				echo "looking for allowed commands"
@@ -1012,7 +1012,7 @@ then
 	swear_prevention $PLAYERCHATID $(echo $CHATGREP | cut -d" " -f4-) &
 fi
 }
-log_kill() {
+log_kill() { #Separated out kill time variable. Added log_checkbounty and check for dead playerfile
 # If kill string is found
 # Set CKILLSTRING to current kill string array
 CKILLSTRING=$@
@@ -1025,19 +1025,28 @@ then
 	if [ -e $PLAYERFILE/$PLAYERKILLER ]
 	then
 		PLAYERFILEEXISTS=1
-#	    echo "player has a playerfile"
+#	    echo "player killer has a playerfile"
 	else
 		log_playerinfo $PLAYERKILLER
 	fi
+	
 # Grab the current player killed
 	PLAYERDEAD=$(echo $CKILLSTRING | cut -d\[ -f4 | cut -d\; -f1)
+	if [ -e $PLAYERFILE/$PLAYERDEAD ]
+	then
+		PLAYERFILEEXISTS=1
+#	    echo "Dead player has a playerfile"
+	else
+		log_playerinfo $PLAYERDEAD
+	fi
+	
 #	echo playerdead is $PLAYERDEAD
-# Send who killed
-	LASTKILLED=$(grep PlayerLastKilled $PLAYERFILE/$PLAYERKILLER | cut -d= -f2 | tr -d ' ')
-	KILLEDBY=$(grep PlayerKilledBy $PLAYERFILE/$PLAYERDEAD | cut -d= -f2 | cut -d" " -f1)
+# Send information to the playerfiles and log to indicate who killed, got killed, and at what time
 	as_user "echo $PLAYERKILLER killed $PLAYERDEAD without predujice >> $KILLLOG"
-	as_user "sed -i 's/PlayerLastKilled=$LASTKILLED/PlayerLastKilled=$PLAYERDEAD/g' $PLAYERFILE/$PLAYERKILLER"
-	as_user "sed -i 's/PlayerKilledBy=.*/PlayerKilledBy=$PLAYERKILLER $(date +%s)/g' $PLAYERFILE/$PLAYERDEAD"  
+	as_user "sed -i 's/PlayerLastKilled=.*/PlayerLastKilled=$PLAYERDEAD/g' $PLAYERFILE/$PLAYERKILLER"
+	as_user "sed -i 's/PlayerKilledBy=.*/PlayerKilledBy=$PLAYERKILLER/g' $PLAYERFILE/$PLAYERDEAD"
+	as_user "sed -i 's/PlayerKilledtime=.*/PlayerKilledtime=$(date +%s)/g' $PLAYERFILE/$PLAYERDEAD"
+	log_checkbounty $PLAYERKILLER $PLAYERDEAD
 # If the current kill string involved ship combat        
 elif echo $CKILLSTRING | grep "Ship" >/dev/null
 then
@@ -1046,6 +1055,14 @@ then
 #	echo ShipKiller is $SHIPKILLER
 # Grab the player than died
 	PLAYERDEAD=$(echo $CKILLSTRING | cut -d\[ -f2 | cut -d\; -f1)
+	if [ -e $PLAYERFILE/$PLAYERDEAD ]
+	then
+		PLAYERFILEEXISTS=1
+#	    echo "dead player has a playerfile"
+	else
+		log_playerinfo $PLAYERDEAD
+	fi
+	
 #	echo PlayerDead is $PLAYERDEAD
 # Grab the player who did the killing by matching the ship to the player in the ship.log
 	if grep $SHIPKILLER $SHIPLOG
@@ -1055,16 +1072,16 @@ then
 		if [ -e $PLAYERFILE/$PLAYERKILLER ]
 		then
 			PLAYERFILEEXISTS=1
-#		    echo "player has a playerfile"
+#		    echo "player killer has a playerfile"
 		else
 			log_playerinfo $PLAYERKILLER
 		fi
-		LASTKILLED=$(grep PlayerLastKilled $PLAYERFILE/$PLAYERKILLER | cut -d= -f2 | tr -d ' ')
-		KILLEDBY=$(grep PlayerKilledBy $PLAYERFILE/$PLAYERDEAD | cut -d= -f2 | cut -d" " -f1)
 # Write to the kill log who did the killing and who got killed
 		as_user "echo $PLAYERKILLER killed $PLAYERDEAD without predujice >> $KILLLOG"
-		as_user "sed -i 's/PlayerLastKilled=$LASTKILLED/PlayerLastKilled=$PLAYERDEAD/g' $PLAYERFILE/$PLAYERKILLER"
-		as_user "sed -i 's/PlayerKilledBy=.*/PlayerKilledBy=$PLAYERKILLER $(date +%s)/g' $PLAYERFILE/$PLAYERDEAD"
+		as_user "sed -i 's/PlayerLastKilled=.*/PlayerLastKilled=$PLAYERDEAD/g' $PLAYERFILE/$PLAYERKILLER"
+		as_user "sed -i 's/PlayerKilledBy=.*/PlayerKilledBy=$PLAYERKILLER/g' $PLAYERFILE/$PLAYERDEAD"
+		as_user "sed -i 's/PlayerKilledtime=.*/PlayerKilledtime=$(date +%s)/g' $PLAYERFILE/$PLAYERDEAD"
+		log_checkbounty $PLAYERKILLER $PLAYERDEAD
 	else
 		as_user "echo $PLAYERDEAD was killed by AI ships >> $KILLLOG"
 	fi
@@ -1567,6 +1584,46 @@ then
 	fi
 fi
 }
+log_checkbounty(){ #Added to automatically check to see if bounty should be rewarded
+#echo "Checking Bounty for $2 for playerkiller $1" 
+source $PLAYERFILE/$2
+BOUNTYAMOUNT=$Bounty
+if [ "$BOUNTYAMOUNT" -eq 0 ]
+then
+#echo "No bounty detected"
+NOBOUNTY=1
+else
+#	echo "Current bounty for player killed $BOUNTYAMOUNT"
+	BOUNTYTIME=$BountyPlaced
+#	echo "Current time of bounty for player killed $BountyPlaced"
+	LASTKILLEDPLAYER=$PlayerKilledBy
+#	echo "This is the last player to kill dead player $LASTKILLEDPLAYER"
+	LASTKILLEDTIME=$PlayerKilledtime
+#	echo "This is the time of the last player to kill dead player $LASTKILLEDTIME"
+	source $PLAYERFILE/$1
+	LASTPLAYERKILLED=$PlayerLastKilled
+#	echo "This is the last player the playerkiller killed $LASTPLAYERKILLED"
+	PLAYERBALANCE=$CreditsInBank
+#	echo "This is the current credits in the bank for the playerkiller $CreditsInBank"
+	if [ "$LASTPLAYERKILLED" == "$2" ] 
+	then
+#		echo "Kills match testimg"
+		if [ "$BOUNTYTIME" -lt "$LASTKILLEDTIME" ]
+		then
+#			echo "Bounty posted before kill"					
+#			echo "This is the player balance $PLAYERBALANCE that is recieving the bounty"
+			NEWBALANCE=$(( $PLAYERBALANCE + $BOUNTYAMOUNT ))
+#			echo "This is the new player balance $NEWBALACE"
+			as_user "sed -i 's/CreditsInBank=.*/CreditsInBank=$NEWBALANCE/g' $PLAYERFILE/$1"
+			as_user "sed -i 's/Bounty=.*/Bounty=0/g' $PLAYERFILE/$2"
+			as_user "screen -p 0 -S $SCREENID -X stuff $'/pm $1 GALACTIC COMMAND - You received $BOUNTYAMOUNT credits in you account from eliminating $2\n'"
+		else
+#			echo "Bounty posted after kill"
+			BOUNTYAFTERKILL=1
+		fi
+	fi
+fi
+}
 
 #------------------------------Game mechanics-----------------------------------------
 
@@ -1998,7 +2055,7 @@ done
 
 #---------------------------Files Daemon Writes and Updates---------------------------------------------
 
-write_factionfile() { #updated all variables to use =
+write_factionfile() { 
 CREATEFACTION="cat > $FACTIONFILE/$1 <<_EOF_
 CreditsInBank=0
 OwnedSectors=0
@@ -2118,13 +2175,14 @@ STARTINGRANK=Ensign #The initial rank players recieve when they log in for the f
 _EOF_"
 as_user "$CONFIGCREATE"
 }
-write_playerfile() { #updated all variables to use =
+write_playerfile() { #Changed grep rank to use = format, separated out time variables for kill and bounty
 PLAYERCREATE="cat > $PLAYERFILE/$1 <<_EOF_
-Rank: [$STARTINGRANK]
+Rank=$STARTINGRANK
 CreditsInBank=0
 VotingPoints=0
 CurrentVotes=0
 Bounty=0
+BountyPlaced=0
 WarpTeir=1
 JumpDisabled=0
 CommandConfirm=0
@@ -2140,6 +2198,7 @@ PlayerLastFold=0
 PlayerLastUpdate=0
 PlayerLastKilled=None
 PlayerKilledBy=None
+PlayerKilledtime=0
 PlayerLoggedIn=No
 ChatCount=0
 SpamWarning=No
@@ -2931,7 +2990,7 @@ function COMMAND_MAILALL(){
 }
 
 #Bounty Commands
-function COMMAND_POSTBOUNTY(){
+function COMMAND_POSTBOUNTY(){ #Separated out bounty time variable
 #Places a bounty on the player specified, by taking the specified amount of credits from your account.
 #USAGE: !POSTBOUNTY <Player> <Amount>
 if [ "$#" -ne "3" ]
@@ -2939,7 +2998,8 @@ then
 	as_user "screen -p 0 -S $SCREENID -X stuff $'/pm $1 Invalid parameters. Please use !POSTBOUNTY <player> <amount>\n'"
 else
 #	echo "$1 wants to place a $3 credit bounty on $2"
-	BALANCECREDITS=$(grep CreditsInBank $PLAYERFILE/$1 | cut -d= -f2 | tr -d ' ')
+	source $PLAYERFILE/$1
+	BALANCECREDITS=$CreditsInBank
 #	echo "Current bank credits are $BALANCECREDITS"
 	if [ "$1" = "$2" ]
 	then
@@ -2953,7 +3013,8 @@ else
 			then
 				if [ "$3" -le "$BALANCECREDITS" ]
 				then
-					OLDBOUNTY=$(grep Bounty $PLAYERFILE/$2 | cut -d= -f2 | cut -d" " -f1)
+					source $PLAYERFILE/$2
+					OLDBOUNTY=$Bounty
 #					echo "The old bounty is $OLDBOUNTY"
 #					echo "Current bounty found"
 					CURRENTBOUNTY=$(( $OLDBOUNTY + $3 ))
@@ -2961,12 +3022,13 @@ else
 					NEWBALANCE=$(( $BALANCECREDITS - $3 ))
 					if [ "$OLDBOUNTY" -eq "0" ]
 					then
-						as_user "sed -i 's/Bounty=.*/Bounty=$CURRENTBOUNTY $(date +%s)/g' $PLAYERFILE/$2"
-						as_user "sed -i 's/CreditsInBank=$BALANCECREDITS/CreditsInBank=$NEWBALANCE/g' $PLAYERFILE/$1"
+						as_user "sed -i 's/Bounty=.*/Bounty=$CURRENTBOUNTY/g' $PLAYERFILE/$2"
+						as_user "sed -i 's/BountyPlaced=.*/BountyPlaced=$(date +%s)/g' $PLAYERFILE/$2"
+						as_user "sed -i 's/CreditsInBank=.*/CreditsInBank=$NEWBALANCE/g' $PLAYERFILE/$1"
 						as_user "screen -p 0 -S $SCREENID -X stuff $'/pm $1 GALACTIC COMMAND - You have placed a bounty of $3 on $2\n'"
 					else
-						as_user "sed -i 's/Bounty=$OLDBOUNTY/Bounty=$CURRENTBOUNTY/g' $PLAYERFILE/$2"
-						as_user "sed -i 's/CreditsInBank=$BALANCECREDITS/CreditsInBank=$NEWBALANCE/g' $PLAYERFILE/$1"
+						as_user "sed -i 's/Bounty=.*/Bounty=$CURRENTBOUNTY/g' $PLAYERFILE/$2"
+						as_user "sed -i 's/CreditsInBank=.*/CreditsInBank=$NEWBALANCE/g' $PLAYERFILE/$1"
 						as_user "screen -p 0 -S $SCREENID -X stuff $'/pm $1 GALACTIC COMMAND - You have placed a bounty of $3 on $2\n'"
 				
 					fi
@@ -2980,72 +3042,33 @@ else
 	fi	
 fi
 }
-function COMMAND_LISTBOUNTY(){
+function COMMAND_LISTBOUNTY(){ #Updated listing function and also added in no bounty output if none are detected
 #Lists all players with bounties, and how much they are worth
 #USAGE: !LISTBOUNTY
 if [ "$#" -ne "1" ]
-	then
-		as_user "screen -p 0 -S $SCREENID -X stuff $'/pm $1 Invalid parameters. Please use !LISTBOUNTY\n'"
-	else
-		for PBOUNTY in $PLAYERFILE/*
-		do
-			BOUNTYAMMOUNT=$(grep "Bounty" $BOUNTY | cut -d= -f2 | cut -d" " -f1)
-			if [ "$BOUNTYAMMOUNT" -gt "0" ]
-			then
-			BOUNTYNAME=$(echo $PBOUNTY | rev | cut -d/ -f1 | rev)
-			as_user "screen -p 0 -S $SCREENID -X stuff $'/pm $1 $BOUNTYNAME - $BOUNTYAMMOUNT credits\n'"
-			fi
-		done
-	as_user "screen -p 0 -S $SCREENID -X stuff $'/pm $1 GALACTIC COMMAND - The current bounties are:\n'"
-	fi
-#PLAYERFILES=( $(find /home/reed/playerfiles -type f | cut -d\/ -f5) )
-#playerfiles -type f | cut -d\/ -f5	
-
-}
-function COMMAND_COLLECTBOUNTY(){
-#Collects the bounty from your recent kill (WIP)
-#USAGE: !COLLECTBOUNTY <Player>
-if [ "$#" -ne "2" ]
 then
-	as_user "screen -p 0 -S $SCREENID -X stuff $'/pm $1 Invalid parameters. Please use !COLLECTBOUNTY <playername>\n'"
+	as_user "screen -p 0 -S $SCREENID -X stuff $'/pm $1 Invalid parameters. Please use !LISTBOUNTY\n'"
 else
-#	echo "$1 is trying to collect a bounty"
-	BOUNTYAMOUNT=$(grep Bounty $PLAYERFILE/$2 | cut -d= -f2 | cut -d" " -f1)
-	BOUNTYTIME=$(grep Bounty $PLAYERFILE/$2 | cut -d" " -f2)
-#	echo "This is the bounty amount for $2 $BOUNTYAMOUNT"
-	if [ "$BOUNTYAMOUNT" -eq 0 ]
-	then
-#		echo "No bounty"
-		as_user "screen -p 0 -S $SCREENID -X stuff $'/pm $1 GALACTIC COMMAND - No bounty found\n'"
-	else
-#		echo "Bounty Found"
-		LASTPLAYERKILLED=$(grep PlayerLastKilled $PLAYERFILE/$1 | cut -d= -f2)
-#		echo "This is the player killed $LASTPLAYERKILLED for $1"
-		LASTKILLEDPLAYER=$(grep PlayerKilledBy $PLAYERFILE/$2 | cut -d= -f2 | cut -d" " -f1)
-#		echo "$LASTKILLEDPLAYER  is the last player to kill $2"
-		LASTKILLEDTIME=$(grep PlayerKilledBy $PLAYERFILE/$2 | cut -d" " -f2)
-#		echo "This is the time of the last kill $LASTKILLEDTIME"
-		if [ "$LASTPLAYERKILLED" == "None" ] || [ "$LASTKILLEDPLAYER" == "None" ] || [ "$LASTPLAYERKILLED" != "$2" ] || [ "$LASTKILLEDPLAYER" != "$1" ]
+	BOUNTYLIST=( $(ls $PLAYERFILE) )
+	echo "here is the playefile list ${BOUNTYLIST[@]}"
+	BARRAY=0
+	while [ -n "${BOUNTYLIST[$BARRAY]+set}" ] 
+	do
+		BOUNTYNAME=${BOUNTYLIST[$BARRAY]}
+		echo "Current playername $BOUNTYNAME"
+		source $PLAYERFILE/$BOUNTYNAME
+		echo "Current bounty for player $Bounty"
+		BOUNTYTOTAL=0
+		if [ "$Bounty" -gt 0 ]
 		then
-#			echo "No kills"
-			as_user "screen -p 0 -S $SCREENID -X stuff $'/pm $1 GALACTIC COMMAND - Unable to verify kill\n'"
-		else
-#			echo "Playerkill name matched"
-			if [ "$BOUNTYTIME" -lt "$LASTKILLEDTIME" ]
-			then
-#				echo "Bounty posted before kill"					
-				PLAYERBALANCE=$(grep CreditsInBank $PLAYERFILE/$1 | cut -d= -f2)
-#				echo "This is the player balance $PLAYERBALANCE that is recieving the bounty"
-				NEWBALANCE=$(( $PLAYERBALANCE + $BOUNTYAMOUNT ))
-#				echo "This is the new player balance $NEWBALACE"
-				as_user "sed -i 's/CreditsInBank=.*/CreditsInBank=$NEWBALANCE/g' $PLAYERFILE/$1"
-				as_user "sed -i 's/Bounty=.*/Bounty=0/g' $PLAYERFILE/$2"
-				as_user "screen -p 0 -S $SCREENID -X stuff $'/pm $1 GALACTIC COMMAND - You received $BOUNTYAMOUNT credits in you account from eliminating $2\n'"
-			else
-#				echo "Bounty posted after kill"
-				as_user "screen -p 0 -S $SCREENID -X stuff $'/pm $1 GALACTIC COMMAND - You killed this player before the bounty was posted\n'"
-			fi
-		fi		
+			as_user "screen -p 0 -S $SCREENID -X stuff $'/pm $1 $BOUNTYNAME - $Bounty credits\n'"
+			let BOUNTYTOTAL++
+		fi
+		let BARRAY++
+	done
+	if [ "$BOUNTYTOTAL" -eq "0" ]	
+	then
+		as_user "screen -p 0 -S $SCREENID -X stuff $'/pm $1 No bounties detected\n'"
 	fi
 fi
 }
@@ -3820,14 +3843,14 @@ function COMMAND_VOTEBALANCE(){
 }
 
 #Utility Commands
-function COMMAND_HELP(){
+function COMMAND_HELP(){ #Changed grep for rank to = format
 #Provides help on any and all functions available to the player
 #USAGE: !HELP <Command (optional)>
 	if [ "$#" -gt "2" ]
 	then
 		as_user "screen -p 0 -S $SCREENID -X stuff $'/pm $1 Invalid parameters. Please use !HELP <Command (Optional)>\n'"
 	else		
-		PLAYERRANK[$1]=$(grep "Rank:" $PLAYERFILE/$1 | cut -d\[ -f2 | cut -d\] -f1 )
+		PLAYERRANK[$1]=$(grep "Rank=" $PLAYERFILE/$1 | cut -d= -f2)
 		ALLOWEDCOMMANDS[$1]=$(grep $PLAYERRANK $RANKCOMMANDS)
 		HELPCOMMAND=$(echo $2 | tr [a-z] [A-Z])
 		if [ "$#" -eq "1" ]
@@ -4804,9 +4827,6 @@ ban)
 	;;
 dump)
 	sm_dump $@
-	;;
-uptest)
-	update_file $@
 	;;
 box)
 	sm_box $@
