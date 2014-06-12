@@ -1,4 +1,6 @@
 Requested features for starmade:
+
+Commands:
  - /inventory_list_player <player>
 	lists all the items in a players inventory and the stack sizes
  - /inventory_edit_player <player> <inventory-slot> <itemID> <stack-size>
@@ -14,3 +16,6 @@ Requested features for starmade:
  - /ai_patrol_stop <entity-name>
 	Stops the selected AI ship from following the patrol path
 	
+Log output:
+ - Improved log output on inventory changes (player and the name of the entity the inventory change occured on)
+ - Improved log output on faction changes (on joining a brand new faction and being the last person to leave a faction)
