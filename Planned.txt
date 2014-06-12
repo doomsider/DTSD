@@ -1,0 +1,9 @@
+Planned features for starmaded:
+ - The ability for the !GIVESET command to read the block config
+ - Cleaned up code, using source to get variables from files
+ - Add in the use of the box function for general commands
+ - Faction points, gained for faction activity and used for various systems (jump and warp mabey?)
+ - A custom spawning system, using plex storages as payment for the ships (as soon as blueprint and inventory commands are added)
+ - Variable shutdown timer for use in the sm_stop command
+ - New gamemodes (Hardcore and race for credits)
+ - Fleet system (needs new command before it can be fully implimented)

@@ -1,0 +1,16 @@
+Requested features for starmade:
+ - /inventory_list_player <player>
+	lists all the items in a players inventory and the stack sizes
+ - /inventory_edit_player <player> <inventory-slot> <itemID> <stack-size>
+	Allows you to edit the inventory of a player. (negative stack sizes remove items of that ID and ID 0 removes the stack)
+ - /inventoy_edit_entity <entity> <inventory-location> <inventory-slot> <itemID> <stack-size>
+	Allows you to edit inventories on entities. (negative stack sizes remove items of that ID and ID 0 removes the stack)
+ - /blueprint_cost <blueprint-name>
+	Returns the cost of a blueprint in either credits or blocks depending on the server settings
+ - /change_sector_for_entity <entity-name> <x> <y> <z>
+	Changes sectors for ships even if they arent player controlled
+ - /ai_patrol <entity-name> <x1> <y1> <z1> <x2> <y2> <z2> ... <xn> <yn> <zn>
+	Makes the selected AI ship fly to sector x1,y1,z1 then x2,y2,z2 ect to xn,yn,zn and then back to x1,y1,z1
+ - /ai_patrol_stop <entity-name>
+	Stops the selected AI ship from following the patrol path
+	
