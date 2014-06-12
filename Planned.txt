@@ -1,4 +1,4 @@
-Planned features for starmaded:
+Planned/ideas for features for starmaded:
  - The ability for the !GIVESET command to read the block config
  - Cleaned up code, using source to get variables from files
  - Add in the use of the box function for general commands
