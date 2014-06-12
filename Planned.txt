@@ -7,3 +7,10 @@ Planned features for starmaded:
  - Variable shutdown timer for use in the sm_stop command
  - New gamemodes (Hardcore and race for credits)
  - Fleet system (needs new command before it can be fully implimented)
+ - Faction points for activity
+ - Kit store for voting points
+ - Voting points/faction points exchange
+ - Wrapper functionality (packet interception) <will run by schema>
+ - Inter-server mail system <will run by schema>
+ - Inter-server war system <will run by schema>
+ 
