@@ -10,7 +10,10 @@ Planned/ideas for features for starmaded:
  - Faction points for activity
  - Kit store for voting points
  - Voting points/faction points exchange
+ 
+Advanced/looking into:
  - Wrapper functionality (packet interception) <will run by schema>
  - Inter-server mail system <will run by schema>
  - Inter-server war system <will run by schema>
- 
+ - Ingame chat linked to IRC channel for the server
+ - Use of the uplink data to inform users when they recieve a starmadedock mail message? <will run by resba and schema>
