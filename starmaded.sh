@@ -1496,7 +1496,7 @@ then
 	fi
 fi
 }
-log_on_login() { 
+log_on_login() { #Fix for date having spaces and getting error on sourcing playerfile
 LOGINPLAYER=$(echo $@ | cut -d: -f2 | cut -d" " -f2)
 #echo "$LOGINPLAYER logged in"
 create_playerfile $LOGINPLAYER
@@ -1505,7 +1505,7 @@ as_user "sed -i 's/ChatCount=.*/ChatCount=0/g' $PLAYERFILE/$LOGINPLAYER"
 as_user "sed -i 's/SpamWarning=.*/SpamWarning=No/g' $PLAYERFILE/$LOGINPLAYER"
 as_user "sed -i 's/SwearCount=.*/SwearCount=0/g' $PLAYERFILE/$LOGINPLAYER"
 as_user "sed -i 's/CapsCount=.*/CapsCount=0/g' $PLAYERFILE/$LOGINPLAYER"
-as_user "sed -i 's/PlayerLastLogin=.*/PlayerLastLogin=$(date)/g' $PLAYERFILE/$LOGINPLAYER"
+as_user "sed -i 's/PlayerLastLogin=.*/PlayerLastLogin=$DATE/g' $PLAYERFILE/$LOGINPLAYER"
 LOGON="$LOGINPLAYER logged on at $(date '+%b_%d_%Y_%H.%M.%S') server time"
 as_user "echo $LOGON >> $GUESTBOOK"
 as_user "echo $LOGINPLAYER >> $ONLINELOG"
@@ -3050,14 +3050,14 @@ then
 	as_user "screen -p 0 -S $SCREENID -X stuff $'/pm $1 Invalid parameters. Please use !LISTBOUNTY\n'"
 else
 	BOUNTYLIST=( $(ls $PLAYERFILE) )
-	echo "here is the playefile list ${BOUNTYLIST[@]}"
+#	echo "here is the playefile list ${BOUNTYLIST[@]}"
 	BARRAY=0
 	while [ -n "${BOUNTYLIST[$BARRAY]+set}" ] 
 	do
 		BOUNTYNAME=${BOUNTYLIST[$BARRAY]}
-		echo "Current playername $BOUNTYNAME"
+#		echo "Current playername $BOUNTYNAME"
 		source $PLAYERFILE/$BOUNTYNAME
-		echo "Current bounty for player $Bounty"
+#		echo "Current bounty for player $Bounty"
 		BOUNTYTOTAL=0
 		if [ "$Bounty" -gt 0 ]
 		then
