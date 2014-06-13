@@ -1500,6 +1500,7 @@ log_on_login() { #Fix for date having spaces and getting error on sourcing playe
 LOGINPLAYER=$(echo $@ | cut -d: -f2 | cut -d" " -f2)
 #echo "$LOGINPLAYER logged in"
 create_playerfile $LOGINPLAYER
+DATE=$(date '+%b_%d_%Y_%H.%M.%S')
 as_user "sed -i 's/JustLoggedIn=.*/JustLoggedIn=Yes/g' $PLAYERFILE/$LOGINPLAYER"
 as_user "sed -i 's/ChatCount=.*/ChatCount=0/g' $PLAYERFILE/$LOGINPLAYER"
 as_user "sed -i 's/SpamWarning=.*/SpamWarning=No/g' $PLAYERFILE/$LOGINPLAYER"
