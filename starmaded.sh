@@ -1976,46 +1976,49 @@ do
 #		Tells the while loop what file to read
 		done < $SECTORFILE
 #	Ensures it runs every hour
+		fi
 	sleep 3600
-	fi
 done
 	
 }
 sectorfees(){
 while [ -e /proc/$SM_LOG_PID ]
 do 
-	for FACTION in $FACTIONFILE/*
-	do
-		FACTIONID=$(echo $FACTION | rev | cut -d"/" -f1 | rev)
-		OWNEDSECTORS=($(grep "OwnedSectors=" $FACTION | cut -d"=" -f2-))
-		FACTIONCREDITS=$(grep "CreditsInBank=" $FACTION | cut -d= -f2)
-		FEES=$(echo "(${#OWNEDSECTORS[@]}*$DAILYFEES)/24" | bc -l | cut -d"." -f1)
-		FACTIONCREDITS=$(($FACTIONCREDITS-$FEES))
-		if [ $FACTIONCREDITS -lt 0 ] && [ $(($FACTIONCREDITS+$FEES)) -gt 0 ] && [ $FEES -gt 0 ]
-		then
-			UNREADCOUNT=$(grep "UnreadMail" $MAILFILE/FAC@$FACTIONID | cut -d" " -f2)
-			as_user "sed -i 's/UnreadMail: $UNREADCOUNT/UnreadMail: $(($UNREADCOUNT + 1))/g' $MAILFILE/FAC@$FACTIONID"
-			CURRENTMAILID=$(grep "CurrentMailId:" $MAILFILE/FAC@$FACTIONID | cut -d" " -f4)
-			echo "MessageID: $CURRENTMAILID Unread: Yes Sender: GALACTICEBANK Time: $(date +%s) Message: Your faction has run out of credits! You have 48 hours to pay off your debt or you will lose your sectors, 1 sector every hour!" >> $MAILFILE/FAC@$FACTIONID
-			as_user "sed -i 's/CurrentMailId: $CURRENTMAILID/CurrentMailId: $(($CURRENTMAILID + 1))/g' $MAILFILE/FAC@$FACTIONID" 
-		elif [ $FACTIONCREDITS -lt $((-$FEES*48)) ] && [ $FEES -gt 0 ]
-		then
-			SECTOR=${OWNEDSECTORS[0]}
-			BEACONNAME=$(grep -- " $SECTOR " $SECTORFILE | cut -d" " -f6)
-			as_user "sed -i '/ $SECTOR .*/d' $SECTORFILE"
-			as_user "sed -i 's/ $SECTOR//g' $FACTION"
-			as_user "sed -i '/[$SECTOR]/d' $PROTECTEDSECTORS"
-			UNREADCOUNT=$(grep "UnreadMail" $MAILFILE/FAC@$FACTIONID | cut -d" " -f2)
-			as_user "sed -i 's/UnreadMail: $UNREADCOUNT/UnreadMail: $(($UNREADCOUNT + 1))/g' $MAILFILE/FAC@$FACTIONID"
-			CURRENTMAILID=$(grep "CurrentMailId:" $MAILFILE/FAC@$FACTIONID | cut -d" " -f4)
-			echo "MessageID: $CURRENTMAILID Unread: Yes Sender: GALACTICEBANK Time: $(date +%s) Message: Your beacon in sector $SECTOR has been deactivated as repayment for your debt." >> $MAILFILE/FAC@$FACTIONID
-			as_user "sed -i 's/CurrentMailId: $CURRENTMAILID/CurrentMailId: $(($CURRENTMAILID + 1))/g' $MAILFILE/FAC@$FACTIONID"
-			as_user "screen -p 0 -S $SCREENID -X stuff $'/despawn_all $BEACONNAME unused false\n'"
-			sectoradjacent $FACTIONID
-		fi
-		as_user "sed -i 's/CreditsInBank=.*/CreditsInBank=$FACTIONCREDITS/g' $FACTION"
-	done
-sleep 3600
+	if [ "$(ls -A $FACTIONFILE)" ]
+	then
+		for FACTION in $FACTIONFILE/*
+		do
+			FACTIONID=$(echo $FACTION | rev | cut -d"/" -f1 | rev)
+			OWNEDSECTORS=($(grep "OwnedSectors=" $FACTION | cut -d"=" -f2-))
+			FACTIONCREDITS=$(grep "CreditsInBank=" $FACTION | cut -d= -f2)
+			FEES=$(echo "(${#OWNEDSECTORS[@]}*$DAILYFEES)/24" | bc -l | cut -d"." -f1)
+			FACTIONCREDITS=$(($FACTIONCREDITS-$FEES))
+			if [ $FACTIONCREDITS -lt 0 ] && [ $(($FACTIONCREDITS+$FEES)) -gt 0 ] && [ $FEES -gt 0 ]
+			then
+				UNREADCOUNT=$(grep "UnreadMail" $MAILFILE/FAC@$FACTIONID | cut -d" " -f2)
+				as_user "sed -i 's/UnreadMail: $UNREADCOUNT/UnreadMail: $(($UNREADCOUNT + 1))/g' $MAILFILE/FAC@$FACTIONID"
+				CURRENTMAILID=$(grep "CurrentMailId:" $MAILFILE/FAC@$FACTIONID | cut -d" " -f4)
+				echo "MessageID: $CURRENTMAILID Unread: Yes Sender: GALACTICEBANK Time: $(date +%s) Message: Your faction has run out of credits! You have 48 hours to pay off your debt or you will lose your sectors, 1 sector every hour!" >> $MAILFILE/FAC@$FACTIONID
+				as_user "sed -i 's/CurrentMailId: $CURRENTMAILID/CurrentMailId: $(($CURRENTMAILID + 1))/g' $MAILFILE/FAC@$FACTIONID" 
+			elif [ $FACTIONCREDITS -lt $((-$FEES*48)) ] && [ $FEES -gt 0 ]
+			then
+				SECTOR=${OWNEDSECTORS[0]}
+				BEACONNAME=$(grep -- " $SECTOR " $SECTORFILE | cut -d" " -f6)
+				as_user "sed -i '/ $SECTOR .*/d' $SECTORFILE"
+				as_user "sed -i 's/ $SECTOR//g' $FACTION"
+				as_user "sed -i '/[$SECTOR]/d' $PROTECTEDSECTORS"
+				UNREADCOUNT=$(grep "UnreadMail" $MAILFILE/FAC@$FACTIONID | cut -d" " -f2)
+				as_user "sed -i 's/UnreadMail: $UNREADCOUNT/UnreadMail: $(($UNREADCOUNT + 1))/g' $MAILFILE/FAC@$FACTIONID"
+				CURRENTMAILID=$(grep "CurrentMailId:" $MAILFILE/FAC@$FACTIONID | cut -d" " -f4)
+				echo "MessageID: $CURRENTMAILID Unread: Yes Sender: GALACTICEBANK Time: $(date +%s) Message: Your beacon in sector $SECTOR has been deactivated as repayment for your debt." >> $MAILFILE/FAC@$FACTIONID
+				as_user "sed -i 's/CurrentMailId: $CURRENTMAILID/CurrentMailId: $(($CURRENTMAILID + 1))/g' $MAILFILE/FAC@$FACTIONID"
+				as_user "screen -p 0 -S $SCREENID -X stuff $'/despawn_all $BEACONNAME unused false\n'"
+				sectoradjacent $FACTIONID
+			fi
+			as_user "sed -i 's/CreditsInBank=.*/CreditsInBank=$FACTIONCREDITS/g' $FACTION"
+		done
+	fi
+	sleep 3600
 done
 }
 sectoradjacent(){
