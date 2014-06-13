@@ -8,7 +8,7 @@
 # The daemon should be ran from the intended user as it detects and writes the current username to the configuration file
 
 #For development purposes update check can be turned off
-UPDATECHECK=NO
+UPDATECHECK=YES
 # Set the basics paths for the Daemon automatically.  This can be changed if needed for alternate configurations
 # This sets the path of the script to the actual script directory.  This is some magic I found on stackoverflow http://stackoverflow.com/questions/4774054/reliable-way-for-a-bash-script-to-get-the-full-path-to-itself	
 DAEMONPATH=$(cd `dirname "${BASH_SOURCE[0]}"` && pwd)/`basename "${BASH_SOURCE[0]}"`
@@ -35,22 +35,21 @@ if [ -e $CONFIGPATH ]
 then
 	if [ "$UPDATECHECK" = "YES" ]
 	then
-		echo "Checking HASH to see if Daemon was updated"
+#		echo "Checking HASH to see if Daemon was updated"
 # Grab the hash from the config file and compare it tot he Daemon's hash to see if the Daemon has been updated	
 		CONFIGHASH=$(grep HASH $CONFIGPATH | cut -d= -f2 | tr -d ' ')
 		if [ "$CONFIGHASH" = "$CURRENTHASH" ]
 		then
-			echo "No update detected, Reading from Source $CONFIGPATH"
+#			echo "No update detected, Reading from Source $CONFIGPATH"
 			source $CONFIGPATH
 		else
 			echo "Changes detected updating config files"
-# Here is where update will take place
-			update_daemon
 # Source read from another file.  In this case it is the config file containing all the settings for the Daemon
 			source $CONFIGPATH
+			update_daemon
 		fi
 	else
-		echo "Update check is turned off reading source from config file"
+#		echo "Update check is turned off reading source from config file"
 		source $CONFIGPATH
 	fi
 else
@@ -2347,9 +2346,9 @@ do
 	let OLDARRAY++
 	done
 #	echo "$WRITESTRING"
-	cat <<EOF >> $PATHUPDATEFILE
+	as_user "cat <<EOF >> $PATHUPDATEFILE
 $WRITESTRING
-EOF
+EOF"
 let NEWARRAY++
 done
 }
@@ -2363,7 +2362,7 @@ PARRAY=0
 while [ -n "${PUPDATE[$PARRAY]+set}" ] 
 do
 update_file write_playerfile ${PUPDATE[$PARRAY]}
-echo "${PUPDATE[$PARRAY]} file is being updated"
+#echo "${PUPDATE[$PARRAY]} file is being updated"
 let PARRAY++
 done
 FUPDATE=( $(ls $FACTIONFILE) )
@@ -2371,7 +2370,7 @@ FARRAY=0
 while [ -n "${FUPDATE[$FARRAY]+set}" ] 
 do
 update_file write_factionfile ${FUPDATE[$FARRAY]}
-echo "${FUPDATE[$FARRAY]} file is being updated"
+#echo "${FUPDATE[$FARRAY]} file is being updated"
 let FARRAY++
 done
 CURRENTHASH=$(md5sum $DAEMONPATH |  cut -d" " -f1 | tr -d ' ')
