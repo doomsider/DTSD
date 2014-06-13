@@ -602,7 +602,6 @@ echo "precheck - Checks to see if there is a new pre version, stops server, back
 echo "check - Checks to see if there is a new version, stops server, backs up, and installs it"
 echo "ban username - Bans by username finding all IPs in entity player file and banning them"
 echo "dump - Do a thread dump with number of times and delay between them"
-echo "Box - Send a box message with a color to everyone or a specific player usage: box <red|blue|green> <player (optional) <message>" 
 }
 sm_log() {
 #Saves the PID of this function being run
@@ -815,44 +814,36 @@ parselog(){
 			esac
 }
 sm_box() {
-PRECEIVE=$(ls $PLAYERFILE)
-echo "Players $PRECEIVE"
-ISPLAYER=$3
-echo "Possible playername $ISPLAYER"
-if [[ $PRECEIVE =~ $ISPLAYER ]]
-then
-	echo "player found"
-	MESSAGE=${@:4}
-	case "$2" in
-		*"green"*) 
-			as_user "screen -p 0 -S $SCREENID -X stuff $'/server_message_to info $3 \'$MESSAGE\'\n'"
-		;;
-		*"blue"*)
-			as_user "screen -p 0 -S $SCREENID -X stuff $'/server_message_to warning $3 \'$MESSAGE\'\n'"
-		;;
-		*"red"*) 
-			as_user "screen -p 0 -S $SCREENID -X stuff $'/server_message_to error $3 \'$MESSAGE\'\n'"
-		;;
-		*) 
-		;;
+MESSAGE=${@:4}
+echo $MESSAGE
+case "$2" in
+	*"green"*) 
+	if [ "$3" = "all" ]
+	then
+		as_user "screen -p 0 -S $SCREENID -X stuff $'/server_message_broadcast info \'$MESSAGE\'\n'"
+	else
+		as_user "screen -p 0 -S $SCREENID -X stuff $'/server_message_to info $3 \'$MESSAGE\'\n'"
+	fi
+	;;
+	*"blue"*)
+	if [ "$3" = "all" ]
+	then
+		as_user "screen -p 0 -S $SCREENID -X stuff $'/server_message_broadcast warning \'$MESSAGE\'\n'"
+	else
+		as_user "screen -p 0 -S $SCREENID -X stuff $'/server_message_to warning $3 \'$MESSAGE\'\n'"
+	fi
+	;;
+	*"red"*) 
+	if [ "$3" = "all" ]
+	then
+		as_user "screen -p 0 -S $SCREENID -X stuff $'/server_message_broadcast error \'$MESSAGE\'\n'"
+	else
+		as_user "screen -p 0 -S $SCREENID -X stuff $'/server_message_to error $3 \'$MESSAGE\'\n'"
+	fi
+	;;
+	*) 
+	;;
 	esac
-else
-	echo "No player found"
-	MESSAGE=${@:3}
-	case "$2" in
-		*"green"*) 
-			as_user "screen -p 0 -S $SCREENID -X stuff $'/server_message_broadcast info \'$MESSAGE\'\n'"
-		;;
-		*"blue"*)
-			as_user "screen -p 0 -S $SCREENID -X stuff $'/server_message_broadcast warning \'$MESSAGE\'\n'"
-		;;
-		*"red"*) 
-			as_user "screen -p 0 -S $SCREENID -X stuff $'/server_message_broadcast error \'$MESSAGE\'\n'"
-		;;
-		*) 
-		;;
-	esac
-fi
 }
 #------------------------------Core logging functions-----------------------------------------
 
