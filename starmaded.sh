@@ -8,7 +8,7 @@
 # The daemon should be ran from the intended user as it detects and writes the current username to the configuration file
 
 #For development purposes update check can be turned off
-UPDATECHECK=NO
+UPDATECHECK=YES
 # Set the basics paths for the Daemon automatically.  This can be changed if needed for alternate configurations
 # This sets the path of the script to the actual script directory.  This is some magic I found on stackoverflow http://stackoverflow.com/questions/4774054/reliable-way-for-a-bash-script-to-get-the-full-path-to-itself	
 DAEMONPATH=$(cd `dirname "${BASH_SOURCE[0]}"` && pwd)/`basename "${BASH_SOURCE[0]}"`
@@ -35,22 +35,21 @@ if [ -e $CONFIGPATH ]
 then
 	if [ "$UPDATECHECK" = "YES" ]
 	then
-		echo "Checking HASH to see if Daemon was updated"
+#		echo "Checking HASH to see if Daemon was updated"
 # Grab the hash from the config file and compare it tot he Daemon's hash to see if the Daemon has been updated	
 		CONFIGHASH=$(grep HASH $CONFIGPATH | cut -d= -f2 | tr -d ' ')
 		if [ "$CONFIGHASH" = "$CURRENTHASH" ]
 		then
-			echo "No update detected, Reading from Source $CONFIGPATH"
+#			echo "No update detected, Reading from Source $CONFIGPATH"
 			source $CONFIGPATH
 		else
 			echo "Changes detected updating config files"
-# Here is where update will take place
-			update_daemon
 # Source read from another file.  In this case it is the config file containing all the settings for the Daemon
 			source $CONFIGPATH
+			update_daemon
 		fi
 	else
-		echo "Update check is turned off reading source from config file"
+#		echo "Update check is turned off reading source from config file"
 		source $CONFIGPATH
 	fi
 else
@@ -602,6 +601,7 @@ echo "precheck - Checks to see if there is a new pre version, stops server, back
 echo "check - Checks to see if there is a new version, stops server, backs up, and installs it"
 echo "ban username - Bans by username finding all IPs in entity player file and banning them"
 echo "dump - Do a thread dump with number of times and delay between them"
+echo "box - Send a colored message box.  Usage: box <red|blue|green> <playername (optional)> <message>"
 }
 sm_log() {
 #Saves the PID of this function being run
@@ -814,36 +814,44 @@ parselog(){
 			esac
 }
 sm_box() {
-MESSAGE=${@:4}
-echo $MESSAGE
-case "$2" in
-	*"green"*) 
-	if [ "$3" = "all" ]
-	then
-		as_user "screen -p 0 -S $SCREENID -X stuff $'/server_message_broadcast info \'$MESSAGE\'\n'"
-	else
-		as_user "screen -p 0 -S $SCREENID -X stuff $'/server_message_to info $3 \'$MESSAGE\'\n'"
-	fi
-	;;
-	*"blue"*)
-	if [ "$3" = "all" ]
-	then
-		as_user "screen -p 0 -S $SCREENID -X stuff $'/server_message_broadcast warning \'$MESSAGE\'\n'"
-	else
-		as_user "screen -p 0 -S $SCREENID -X stuff $'/server_message_to warning $3 \'$MESSAGE\'\n'"
-	fi
-	;;
-	*"red"*) 
-	if [ "$3" = "all" ]
-	then
-		as_user "screen -p 0 -S $SCREENID -X stuff $'/server_message_broadcast error \'$MESSAGE\'\n'"
-	else
-		as_user "screen -p 0 -S $SCREENID -X stuff $'/server_message_to error $3 \'$MESSAGE\'\n'"
-	fi
-	;;
-	*) 
-	;;
+PRECEIVE=$(ls $PLAYERFILE)
+#echo "Players $PRECEIVE"
+ISPLAYER=$3
+#echo "Possible playername $ISPLAYER"
+if [[ $PRECEIVE =~ $ISPLAYER ]]
+then
+	echo "player found"
+	MESSAGE=${@:4}
+	case "$2" in
+		*"green"*) 
+			as_user "screen -p 0 -S $SCREENID -X stuff $'/server_message_to info $3 \'$MESSAGE\'\n'"
+		;;
+		*"blue"*)
+			as_user "screen -p 0 -S $SCREENID -X stuff $'/server_message_to warning $3 \'$MESSAGE\'\n'"
+		;;
+		*"red"*) 
+			as_user "screen -p 0 -S $SCREENID -X stuff $'/server_message_to error $3 \'$MESSAGE\'\n'"
+		;;
+		*) 
+		;;
 	esac
+else
+	echo "No player found"
+	MESSAGE=${@:3}
+	case "$2" in
+		*"green"*) 
+			as_user "screen -p 0 -S $SCREENID -X stuff $'/server_message_broadcast info \'$MESSAGE\'\n'"
+		;;
+		*"blue"*)
+			as_user "screen -p 0 -S $SCREENID -X stuff $'/server_message_broadcast warning \'$MESSAGE\'\n'"
+		;;
+		*"red"*) 
+			as_user "screen -p 0 -S $SCREENID -X stuff $'/server_message_broadcast error \'$MESSAGE\'\n'"
+		;;
+		*) 
+		;;
+	esac
+fi
 }
 #------------------------------Core logging functions-----------------------------------------
 
@@ -937,7 +945,7 @@ then
 	fi
 fi
 }
-log_chatcommands() { #Changed grep for playerrank to match = foramt
+log_chatcommands() { 
 # A big thanks to Titanmasher for his help with the Chat Commands.
 #echo "This was passed to chat commands $1"
 CHATGREP=$@
@@ -1012,7 +1020,7 @@ then
 	swear_prevention $PLAYERCHATID $(echo $CHATGREP | cut -d" " -f4-) &
 fi
 }
-log_kill() { #Separated out kill time variable. Added log_checkbounty and check for dead playerfile
+log_kill() { 
 # If kill string is found
 # Set CKILLSTRING to current kill string array
 CKILLSTRING=$@
@@ -1496,7 +1504,7 @@ then
 	fi
 fi
 }
-log_on_login() { #Fix for date having spaces and getting error on sourcing playerfile
+log_on_login() { 
 LOGINPLAYER=$(echo $@ | cut -d: -f2 | cut -d" " -f2)
 #echo "$LOGINPLAYER logged in"
 create_playerfile $LOGINPLAYER
@@ -1585,7 +1593,7 @@ then
 	fi
 fi
 }
-log_checkbounty(){ #Added to automatically check to see if bounty should be rewarded
+log_checkbounty(){ 
 #echo "Checking Bounty for $2 for playerkiller $1" 
 source $PLAYERFILE/$2
 BOUNTYAMOUNT=$Bounty
@@ -2179,7 +2187,7 @@ STARTINGRANK=Ensign #The initial rank players recieve when they log in for the f
 _EOF_"
 as_user "$CONFIGCREATE"
 }
-write_playerfile() { #Changed grep rank to use = format, separated out time variables for kill and bounty
+write_playerfile() {
 PLAYERCREATE="cat > $PLAYERFILE/$1 <<_EOF_
 Rank=$STARTINGRANK
 CreditsInBank=0
@@ -2347,9 +2355,9 @@ do
 	let OLDARRAY++
 	done
 #	echo "$WRITESTRING"
-	cat <<EOF >> $PATHUPDATEFILE
+	as_user "cat <<EOF >> $PATHUPDATEFILE
 $WRITESTRING
-EOF
+EOF"
 let NEWARRAY++
 done
 }
@@ -2363,7 +2371,7 @@ PARRAY=0
 while [ -n "${PUPDATE[$PARRAY]+set}" ] 
 do
 update_file write_playerfile ${PUPDATE[$PARRAY]}
-echo "${PUPDATE[$PARRAY]} file is being updated"
+#echo "${PUPDATE[$PARRAY]} file is being updated"
 let PARRAY++
 done
 FUPDATE=( $(ls $FACTIONFILE) )
@@ -2371,7 +2379,7 @@ FARRAY=0
 while [ -n "${FUPDATE[$FARRAY]+set}" ] 
 do
 update_file write_factionfile ${FUPDATE[$FARRAY]}
-echo "${FUPDATE[$FARRAY]} file is being updated"
+#echo "${FUPDATE[$FARRAY]} file is being updated"
 let FARRAY++
 done
 CURRENTHASH=$(md5sum $DAEMONPATH |  cut -d" " -f1 | tr -d ' ')
@@ -2994,7 +3002,7 @@ function COMMAND_MAILALL(){
 }
 
 #Bounty Commands
-function COMMAND_POSTBOUNTY(){ #Separated out bounty time variable
+function COMMAND_POSTBOUNTY(){ 
 #Places a bounty on the player specified, by taking the specified amount of credits from your account.
 #USAGE: !POSTBOUNTY <Player> <Amount>
 if [ "$#" -ne "3" ]
@@ -3046,7 +3054,7 @@ else
 	fi	
 fi
 }
-function COMMAND_LISTBOUNTY(){ #Updated listing function and also added in no bounty output if none are detected
+function COMMAND_LISTBOUNTY(){ 
 #Lists all players with bounties, and how much they are worth
 #USAGE: !LISTBOUNTY
 if [ "$#" -ne "1" ]
@@ -3847,7 +3855,7 @@ function COMMAND_VOTEBALANCE(){
 }
 
 #Utility Commands
-function COMMAND_HELP(){ #Changed grep for rank to = format
+function COMMAND_HELP(){ 
 #Provides help on any and all functions available to the player
 #USAGE: !HELP <Command (optional)>
 	if [ "$#" -gt "2" ]
@@ -4872,7 +4880,7 @@ debug)
 	;;
 *)
 echo "Doomsider's and Titanmasher's Starmade Daemon (DSD) V.17"
-echo "Usage: starmaded.sh {help|updatefiles|start|stop|ebrake|install|reinstall|restore|status|destroy|restart|upgrade|upgradestar|smdo|smsay|cronstop|cronbackup|cronrestore|backup|backupstar|setplayermax|detect|log|screenlog|check|precheck|ban|dump}"
+echo "Usage: starmaded.sh {help|updatefiles|start|stop|ebrake|install|reinstall|restore|status|destroy|restart|upgrade|upgradestar|smdo|smsay|cronstop|cronbackup|cronrestore|backup|backupstar|setplayermax|detect|log|screenlog|check|precheck|ban|dump|box}"
 #******************************************************************************
 exit 1
 ;;
