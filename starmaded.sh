@@ -2334,27 +2334,30 @@ while [ -n "${NEWFILESTRING[$NEWARRAY]+set}" ]
 do
 	NEWSTR=${NEWFILESTRING[$NEWARRAY]}
 	OLDARRAY=0
+	WRITESTRING=$NEWSTR
 	while [ -n "${OLDFILESTRING[$OLDARRAY]+set}" ]
 	do
 	OLDSTR=${OLDFILESTRING[$OLDARRAY]}
 # If a = is detected grab the value to the right of = and then overwrite the new value
 	if [[ $OLDSTR == *=* ]]
 	then
-		NEWVAR=${NEWSTR%=*}
-		NEWVAL=${NEWSTR##*=}
-		OLDVAR=${OLDSTR%=*}
-		OLDVAL=${OLDSTR##*=}
-		if [ "$OLDVAR" = "$NEWVAR" ]
+		NEWVAR=${NEWSTR%%=*}
+#		echo "Here is the NEWVAR $NEWVAR"
+		NEWVAL=${NEWSTR#*=}
+#		echo "Here is the NEWVAL $NEWVAL"
+		OLDVAR=${OLDSTR%%=*}
+#		echo "Here is the OLDVAR $OLDVAR"
+		OLDVAL=${OLDSTR#*=}
+#		echo "Here is the OLDVAL $OLDVAL"
+		if [[ "$OLDVAR" == "$NEWVAR" ]]
 		then
+#			echo "Matched oldvar $OLDVAR to newvar $NEWVAR"
 			WRITESTRING=${NEWSTR/$NEWVAL/$OLDVAL} 
-			break
 		fi
-	else
-		WRITESTRING=$NEWSTR
 	fi
 	let OLDARRAY++
 	done
-#	echo "$WRITESTRING"
+#	echo "Here is the writestring $WRITESTRING"	
 	as_user "cat <<EOF >> $PATHUPDATEFILE
 $WRITESTRING
 EOF"
