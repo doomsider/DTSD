@@ -2244,7 +2244,6 @@ Ever wanted to be rewarded for voting for the server? Vote now at starmade-serve
 Been voting a lot lately? You can spend your voting points on a Jump Gate! Try !ADDJUMP 
 Want to reward people for killing your arch enemy? Try !POSTBOUNTY
 Fancy becoming a bounty hunter? Use !LISTBOUNTY to see all bounties
-Killed someone with a bounty recently? Try using !COLLECTBOUNTY
 Got too much money? Store some in your bank account with !DEPOSIT
 Need to get some money? Take some out of your bank account with !WITHDRAW
 Stuck in the middle of nowhere but dont want to suicide? Try !CORE
