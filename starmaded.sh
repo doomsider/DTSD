@@ -3097,7 +3097,7 @@ function COMMAND_FOLD(){
 	else
 		CONTROLLINGTYPE=$(grep "PlayerControllingType=" $PLAYERFILE/$1 | cut -d= -f2)
 		CONTROLLINGOBJECT=$(grep "PlayerControllingObject=" $PLAYERFILE/$1 | cut -d= -f2)
-		if [[ "${CONTROLLINGTYPE}" == "Ship" ]] && [[ "$(grep -- "$CONTROLLINGOBJECT" $SHIPLOG | cut -d"<" -f2 | cut -d">" -f1)" == "~none" ]]
+		if [[ "${CONTROLLINGTYPE}" == "Ship" ]] && [[ "$(grep -- "\{$CONTROLLINGOBJECT\}" $SHIPLOG | cut -d"<" -f2 | cut -d">" -f1)" == "~none" ]]
 		then
 			OLDPLAYERLASTFOLD=$(grep PlayerLastFold $PLAYERFILE/$1 | cut -d= -f2- | tr -d ' ')
 			CURRENTTIME=$(date +%s)
@@ -3111,22 +3111,22 @@ function COMMAND_FOLD(){
 					WARMUP=50
 					as_user "sed -i 's/PlayerLastFold=$OLDPLAYERLASTFOLD/PlayerLastFold=$CURRENTTIME/g' $PLAYERFILE/$1"
 					as_user "screen -p 0 -S $SCREENID -X stuff $'/pm $1 Engaging fold calculations please allow 60 seconds to engage\n'"
-					while [ "$WARMUP" -ge 0 ] && [[ "$(grep "PlayerControllingType=" $PLAYERFILE/$1 | cut -d= -f2)" == "Ship" ]] && [[ "$(grep -- "$CONTROLLINGOBJECT" $SHIPLOG | cut -d"<" -f2 | cut -d">" -f1)" == "~none" ]]
+					while [ "$WARMUP" -ge 0 ] && [[ "$(grep "PlayerControllingType=" $PLAYERFILE/$1 | cut -d= -f2)" == "Ship" ]] && [[ "$(grep -- "\{$CONTROLLINGOBJECT\}" $SHIPLOG | cut -d"<" -f2 | cut -d">" -f1)" == "~none" ]]
 					do
 						sleep 1
 						let WARMUP--
 					done
-					if [[ "$(grep "PlayerControllingType=" $PLAYERFILE/$1 | cut -d= -f2)" == "Ship" ]] && [[ "$(grep -- "$CONTROLLINGOBJECT" $SHIPLOG | cut -d"<" -f2 | cut -d">" -f1)" == "~none" ]]
+					if [[ "$(grep "PlayerControllingType=" $PLAYERFILE/$1 | cut -d= -f2)" == "Ship" ]] && [[ "$(grep -- "\{$CONTROLLINGOBJECT\}" $SHIPLOG | cut -d"<" -f2 | cut -d">" -f1)" == "~none" ]]
 					then
 						COUNTDOWN=10
 						as_user "screen -p 0 -S $SCREENID -X stuff $'/pm $1 Engaging fold in...\n'"
-						while [ $COUNTDOWN -ge 0 ] && [[ "$(grep "PlayerControllingType=" $PLAYERFILE/$1 | cut -d= -f2)" == "Ship" ]] && [[ "$(grep -- "$CONTROLLINGOBJECT" $SHIPLOG | cut -d"<" -f2 | cut -d">" -f1)" == "~none" ]]
+						while [ $COUNTDOWN -ge 0 ] && [[ "$(grep "PlayerControllingObject=" $PLAYERFILE/$1 | cut -d= -f2)" == "$CONTROLLINGOBJECT" ]] && [[ "$(grep -- "\{$CONTROLLINGOBJECT\}" $SHIPLOG | cut -d"<" -f2 | cut -d">" -f1)" == "~none" ]]
 						do
 							as_user "screen -p 0 -S $SCREENID -X stuff $'/pm $1 $COUNTDOWN ...\n'"
 							sleep 1
 							let COUNTDOWN--
 						done
-						if [[ "$(grep "PlayerControllingType=" $PLAYERFILE/$1 | cut -d= -f2)" == "Ship" ]] && [[ "$(grep -- "$CONTROLLINGOBJECT" $SHIPLOG | cut -d"<" -f2 | cut -d">" -f1)" == "~none" ]]
+						if [[ "$(grep "PlayerControllingType=" $PLAYERFILE/$1 | cut -d= -f2)" == "Ship" ]] && [[ "$(grep -- "\{$CONTROLLINGOBJECT\}" $SHIPLOG | cut -d"<" -f2 | cut -d">" -f1)" == "~none" ]]
 						then
 							as_user "screen -p 0 -S $SCREENID -X stuff $'/pm $1 Folding Space...\n'"
 							sleep 0.1
@@ -3231,7 +3231,7 @@ function COMMAND_JUMP(){
 			SECTOR=$(grep "PlayerLocation=" $PLAYERFILE/$1 | cut -d= -f2)
 			CONTROLLINGTYPE=$(grep "PlayerControllingType=" $PLAYERFILE/$1 | cut -d= -f2)
 			CONTROLLINGOBJECT=$(grep "PlayerControllingObject=" $PLAYERFILE/$1 | cut -d= -f2)
-			if [[ "$CONTROLLINGTYPE" == "Ship" ]] && [[ "$(grep -- "$CONTROLLINGOBJECT" $SHIPLOG | cut -d"<" -f2 | cut -d">" -f1)" == "~none" ]]
+			if [[ "$CONTROLLINGTYPE" == "Ship" ]] && [[ "$(grep -- "\{$CONTROLLINGOBJECT\}" $SHIPLOG | cut -d"<" -f2 | cut -d">" -f1)" == "~none" ]]
 			then
 #				Check if the player is in a jump gate sector (-- tells grep its the end of parameters due to negative sectors confusing it)
 				if grep -q -- "$SECTOR" $GATELOG
@@ -3263,8 +3263,8 @@ function COMMAND_JUMP(){
 #							Gets the players sector again, to make sure theyre in the same sector still
 							SECTORA=$SECTOR
 							SECTOR=$(grep "PlayerLocation=" $PLAYERFILE/$1 | cut -d= -f2)
-							CONTROLLINGTYPE=$(grep "PlayerControllingType=" $PLAYERFILE/$1 | cut -d= -f2)
-							if [[ "$SECTORA" == "$SECTOR" ]] && [[ "$CONTROLLINGTYPE" == "Ship" ]] && [[ "$(grep -- "$CONTROLLINGOBJECT" $SHIPLOG | cut -d"<" -f2 | cut -d">" -f1)" == "~none" ]]
+							CONTROLLINGOBJECT2=$(grep "PlayerControllingObject=" $PLAYERFILE/$1 | cut -d= -f2)
+							if [[ "$SECTORA" == "$SECTOR" ]] && [[ "$CONTROLLINGOBJECT2" == "$CONTROLLINGOBJECT" ]] && [[ "$(grep -- "\{$CONTROLLINGOBJECT\}" $SHIPLOG | cut -d"<" -f2 | cut -d">" -f1)" == "~none" ]]
 							then
 #								teleports the user to the destination gate
 								as_user "screen -p 0 -S $SCREENID -X stuff $'/change_sector_for $1 $(grep " $2 " $GATELOG | cut -d":" -f3 | cut -d" " -f2 | tr "," " ")\n'"
