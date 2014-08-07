@@ -119,9 +119,10 @@ else
     if ps aux | grep -v grep | grep $SCREENLOG >/dev/null
     then
 		echo "Screenlog detected terminating"
-		PID=$(ps aux | grep -v grep | grep $SCREENLOG | awk '{print $2}')    
-		kill $PID
-    fi
+#		PID=$(ps aux | grep -v grep | grep $SCREENLOG | awk '{print $2}')    
+#		kill $PID
+		as_user "screen -S $SCREENLOG -X quit"
+	fi
 # Check for the output.log and if it is there move it and save it with a time stamp
     if [ -e $STARTERPATH/logs/output.log ] 
     then
@@ -172,6 +173,7 @@ then
 			sleep 1
 		else
 			echo $SERVICE took $LOOPNO seconds to close
+			as_user "screen -S $SCREENLOG -X quit"
 			break
 		fi
 	done
@@ -187,6 +189,7 @@ then
 				sleep 1
 			else
 				echo $SERVICE took $(($LOOPNO + 30)) seconds to close, and had to be force shut down
+				as_user "screen -S $SCREENLOG -X quit"
 				break
 			fi
 		done
@@ -195,6 +198,7 @@ then
 			PID=$(ps aux | grep -v grep | grep $SERVICE | grep -v tee | grep port:$PORT | awk '{print $2}')
 			kill -9 $PID
 # This was added in to troubleshoot freezes at the request of Schema			
+			as_user "screen -S $SCREENLOG -X quit"
 			screen -wipe
 			$SERVICE took too long to close. $SERVICE had to be killed
 		fi
@@ -381,6 +385,7 @@ then
 			sleep 1
 		else
 			echo $SERVICE closed after $LOOPNO seconds
+			as_user "screen -S $SCREENLOG -X quit"
 			break
 		fi
 	done
@@ -392,6 +397,7 @@ then
 		jstack $PID >> $STARTERPATH/logs/threaddump.log  
 		kill -9 $PID
 		echo $SERVICE has to be forcibly closed. A thread dump has been taken and is saved at $STARTERPATH/logs/threaddump.log and should be sent to schema.
+		as_user "screen -S $SCREENLOG -X quit"
 		screen -wipe
 	fi
 else
