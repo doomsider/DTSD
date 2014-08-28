@@ -1,7 +1,7 @@
 #!/bin/bash
 # Doomsider's and Titanmasher's Daemon Script for Starmade.  init.d script 7/10/13 based off of http://paste.boredomsoft.org/main.php/view/62107887
 # All credits to Andrew for his initial work
-# Version .17 6/8/2014
+# Version .17.1 28/8/2014
 # Jstack for a dump has been added into the ebrake command to be used with the detect command to see if server is responsive.
 # These dumps will be in starterpath/logs/threaddump.log and can be submitted to Schema to troubleshoot server crashes
 # !!!You must update starmade.cfg for the Daemon to work on your setup!!!
@@ -97,6 +97,12 @@ then
 	echo "No oldlogs directory detected creating for logging"
 	as_user "mkdir $STARTERPATH/oldlogs"
 fi
+if [ -w /dev/shm/ ]
+then
+	OUTPUTFILE=/dev/shm/output.log
+else
+	OUTPUTFILE=$STARTERPATH/logs/output.log
+fi
 }
 sm_start() { 
 # Wipe and dead screens to prevent a false positive for a running Screenid
@@ -124,14 +130,14 @@ else
 		as_user "screen -S $SCREENLOG -X quit"
 	fi
 # Check for the output.log and if it is there move it and save it with a time stamp
-    if [ -e $STARTERPATH/logs/output.log ] 
+    if [ -e $OUTPUTFILE ] 
     then
 		MOVELOG=$STARTERPATH/oldlogs/output_$(date '+%b_%d_%Y_%H.%M.%S').log
-		as_user "mv $STARTERPATH/logs/output.log $MOVELOG"
+		as_user "mv $OUTPUTFILE $MOVELOG"
     fi
 # Execute the server in a screen while using tee to move the Standard and Error Output to output.log
 	cd $STARTERPATH/StarMade
-	as_user "screen -dmS $SCREENID -m sh -c 'java -Xmx$MAXMEMORY -Xms$MINMEMORY -jar $SERVICE -server -port:$PORT 2>&1 | tee $STARTERPATH/logs/output.log'"
+	as_user "screen -dmS $SCREENID -m sh -c 'java -Xmx$MAXMEMORY -Xms$MINMEMORY -jar $SERVICE -server -port:$PORT 2>&1 | tee $OUTPUTFILE'"
 # Created a limited loop to see when the server starts
     for LOOPNO in {0..7}
 	do
@@ -234,6 +240,67 @@ then
 else
 	echo "Please install Zip"
 	fi 
+fi
+}
+sm_livebackup() {
+# WARNING! Live Backup make only a Backup of the Database! Because, some other dirs and files are in use
+if ps aux | grep $SERVICE | grep -v grep | grep -v tee | grep port:$PORT >/dev/null
+then
+# Check to see if zip is installed, it isn't on most minimal server builds.
+	if command -v zip >/dev/null
+	then
+		if [ -d "$BACKUP" ]
+		then
+			cd $STARTERPATH
+			as_user "screen -p 0 -S $SCREENID -X stuff $'/chat Starting live-backup\n'"
+			echo "Starting live-backup"
+			as_user "screen -p 0 -S $SCREENID -X stuff $'/force_save\n'"
+			sleep 10
+# /delay_save prevents saving of the Server
+			as_user "screen -p 0 -S $SCREENID -X stuff $'/delay_save 3600\n'"
+			sleep 5
+# Create a zip of starmade with time stamp and put it in backup
+			as_user "zip -r $BACKUPNAME$(date '+%b_%d_%Y_%H.%M.%S').zip StarMade/server-database"
+			if [ "$?" == "0" ]
+			then
+				as_user "mv $BACKUPNAME*.zip $BACKUP"
+				as_user "screen -p 0 -S $SCREENID -X stuff $'/chat live-backup complete and successfull\n'"
+				echo "live-backup complete and successfull"
+			else
+				as_user "screen -p 0 -S $SCREENID -X stuff $'/chat live-backup exited with error. Please contact the admins.\n'"
+				echo "live-backup exited with error. Please check"
+			fi
+			as_user "screen -p 0 -S $SCREENID -X stuff $'/delay_save 1\n'"
+			as_user "screen -p 0 -S $SCREENID -X stuff $'/force_save\n'"
+		else
+			echo "Directory not found attempting to create"
+			cd $STARTERPATH
+			as_user "mkdir $BACKUP"
+			as_user "screen -p 0 -S $SCREENID -X stuff $'/chat Starting live-backup\n'"
+			echo "Starting live-backup"
+			as_user "screen -p 0 -S $SCREENID -X stuff $'/force_save\n'"
+			sleep 10
+			as_user "screen -p 0 -S $SCREENID -X stuff $'/delay_save 3600\n'"
+			sleep 5
+			as_user "zip -r $BACKUPNAME$(date '+%b_%d_%Y_%H.%M.%S').zip StarMade/server-database"
+			if [ "$?" == "0" ]
+			then
+				as_user "mv $BACKUPNAME*.zip $BACKUP"
+				as_user "screen -p 0 -S $SCREENID -X stuff $'/chat live-backup complete and successfull\n'"
+				echo "live-backup complete and successfull"
+			else
+				as_user "screen -p 0 -S $SCREENID -X stuff $'/chat live-backup exited with error. Please contact the admins.\n'"
+				echo "live-backup exited with error. Please check"
+			fi
+			as_user "screen -p 0 -S $SCREENID -X stuff $'/delay_save 1\n'"
+			as_user "screen -p 0 -S $SCREENID -X stuff $'/force_save\n'"
+		fi
+	else
+		echo "Please install Zip"
+	fi
+else
+	echo "$SERVICE isn't running, make a regular backup"
+	sm_backup
 fi
 }
 sm_destroy() {
@@ -410,7 +477,7 @@ if ps aux | grep $SERVICE | grep -v grep | grep -v tee | grep port:$PORT >/dev/n
 then
 # Add in a routine to check for STDERR: [SQL] Fetching connection 
 # Send the curent time as a serverwide message
-	if (tail -5 $STARTERPATH/logs/output.log | grep "Fetching connection" >/dev/null)
+	if (tail -5 $OUTPUTFILE | grep "Fetching connection" >/dev/null)
 	then 
 		echo "Database Repairing itself"
 	else
@@ -421,7 +488,7 @@ then
 		sleep 10
 # Check output.log to see if message was recieved by server.  The tail variable may need to be adjusted so that the
 # log does not generate more lines that it looks back into the log
-		if tac $STARTERPATH/logs/output.log | grep -m 1 "$CURRENTTIME" >/dev/null
+		if tac $OUTPUTFILE | grep -m 1 "$CURRENTTIME" >/dev/null
 		then
 			echo "Server is responding"
 			echo "Server time variable is $CURRENTTIME"
@@ -630,7 +697,7 @@ create_rankscommands
 # A tiny sleep to prevent cpu burning overhead
 		sleep 0.1
 # Uses Cat to calculate the number of lines in the log file
-		NUMOFLINES=$(wc -l $STARTERPATH/logs/output.log | cut -d" " -f1)
+		NUMOFLINES=$(wc -l $OUTPUTFILE | cut -d" " -f1)
 # In case Linestart does not have a value give it an interger value of 1.  The prevents a startup error on the script.
 		if [ -z "$LINESTART" ]
 		then
@@ -647,7 +714,7 @@ create_rankscommands
 # This sets the field seperator to use \n next line instead of next space.  This makes it so the array is a whole sentence not a word
 			IFS=$'\n'
 # Linestring is stored as an array of every line in the log
-			LINESTRING=( $(awk "NR==$LINESTART, NR==$NUMOFLINES" $STARTERPATH/logs/output.log) )
+			LINESTRING=( $(awk "NR==$LINESTART, NR==$NUMOFLINES" $OUTPUTFILE) )
 			IFS=$OLD_IFS
 			LINESTART=$NUMOFLINES
 #			echo "$LINESTART is adjusted linestart"
@@ -869,12 +936,12 @@ log_playerinfo() {
 create_playerfile $1
 as_user "screen -p 0 -S $SCREENID -X stuff $'/player_info $1\n'"
 sleep 2
-if tac $STARTERPATH/logs/output.log | grep -m 1 -A 10 "Name: $1" >/dev/null
+if tac $OUTPUTFILE | grep -m 1 -A 10 "Name: $1" >/dev/null
 then
 	OLD_IFS=$IFS
 	IFS=$'\n'
 #echo "Player info $1 found"
-	PLAYERINFO=( $(tac $STARTERPATH/logs/output.log | grep -m 1 -A 10 "Name: $1") )
+	PLAYERINFO=( $(tac $OUTPUTFILE | grep -m 1 -A 10 "Name: $1") )
 	IFS=$OLD_IFS
 	PNAME=$(echo ${PLAYERINFO[0]} | cut -d: -f2 | cut -d" " -f2)
 #echo "Player name is $PNAME"
@@ -4832,6 +4899,9 @@ destroy)
 backup)
 	sm_backup
 	;;
+livebackup)
+	sm_livebackup
+	;;
 smsay)
 	sm_say $@
 	;;
@@ -4889,8 +4959,8 @@ debug)
 	parselog ${@:2}
 	;;
 *)
-echo "Doomsider's and Titanmasher's Starmade Daemon (DSD) V.17"
-echo "Usage: starmaded.sh {help|updatefiles|start|stop|ebrake|install|reinstall|restore|status|destroy|restart|upgrade|upgradestar|smdo|smsay|cronstop|cronbackup|cronrestore|backup|backupstar|setplayermax|detect|log|screenlog|check|precheck|ban|dump|box}"
+echo "Doomsider's and Titanmasher's Starmade Daemon (DSD) V.17.1"
+echo "Usage: starmaded.sh {help|updatefiles|start|stop|ebrake|install|reinstall|restore|status|destroy|restart|upgrade|upgradestar|smdo|smsay|cronstop|cronbackup|cronrestore|backup|livebackup|backupstar|setplayermax|detect|log|screenlog|check|precheck|ban|dump|box}"
 #******************************************************************************
 exit 1
 ;;
