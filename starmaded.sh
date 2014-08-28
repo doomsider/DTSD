@@ -627,6 +627,8 @@ create_rankscommands
 # This while loop runs as long as starmade stays running    
 	while (ps aux | grep $SERVICE | grep -v grep | grep -v tee | grep port:$PORT >/dev/null)
 	do
+# A tiny sleep to prevent cpu burning overhead
+		sleep 0.1
 # Uses Cat to calculate the number of lines in the log file
 		NUMOFLINES=$(wc -l $STARTERPATH/logs/output.log | cut -d" " -f1)
 # In case Linestart does not have a value give it an interger value of 1.  The prevents a startup error on the script.
