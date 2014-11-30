@@ -97,12 +97,6 @@ then
 	echo "No oldlogs directory detected creating for logging"
 	as_user "mkdir $STARTERPATH/oldlogs"
 fi
-if [ -w /dev/shm/ ]
-then
-	OUTPUTFILE=/dev/shm/output.log
-else
-	OUTPUTFILE=$STARTERPATH/logs/output.log
-fi
 }
 sm_start() { 
 # Wipe and dead screens to prevent a false positive for a running Screenid
@@ -130,14 +124,14 @@ else
 		as_user "screen -S $SCREENLOG -X quit"
 	fi
 # Check for the output.log and if it is there move it and save it with a time stamp
-    if [ -e $OUTPUTFILE ] 
+    if [ -e /dev/shm/output$PORT.log ] 
     then
 		MOVELOG=$STARTERPATH/oldlogs/output_$(date '+%b_%d_%Y_%H.%M.%S').log
-		as_user "mv $OUTPUTFILE $MOVELOG"
+		as_user "mv /dev/shm/output$PORT.log $MOVELOG"
     fi
 # Execute the server in a screen while using tee to move the Standard and Error Output to output.log
 	cd $STARTERPATH/StarMade
-	as_user "screen -dmS $SCREENID -m sh -c 'java -Xmx$MAXMEMORY -Xms$MINMEMORY -jar $SERVICE -server -port:$PORT 2>&1 | tee $OUTPUTFILE'"
+	as_user "screen -dmS $SCREENID -m sh -c 'java -Xmx$MAXMEMORY -Xms$MINMEMORY -jar $SERVICE -server -port:$PORT 2>&1 | tee /dev/shm/output$PORT.log'"
 # Created a limited loop to see when the server starts
     for LOOPNO in {0..7}
 	do
@@ -317,7 +311,7 @@ echo "Erase complete"
 fi
 }
 sm_install() {
-if ps aux | grep $SERVICE | grep -v grep | grep -v tee | grep port:$PORT >/dev/nulll
+if ps aux | grep $SERVICE | grep -v grep | grep -v tee | grep port:$PORT >/dev/null
 then
 	echo "$SERVICE is running! Will not start install"
 else
@@ -477,7 +471,7 @@ if ps aux | grep $SERVICE | grep -v grep | grep -v tee | grep port:$PORT >/dev/n
 then
 # Add in a routine to check for STDERR: [SQL] Fetching connection 
 # Send the curent time as a serverwide message
-	if (tail -5 $OUTPUTFILE | grep "Fetching connection" >/dev/null)
+	if (tail -5 /dev/shm/output$PORT.log | grep "Fetching connection" >/dev/null)
 	then 
 		echo "Database Repairing itself"
 	else
@@ -488,7 +482,7 @@ then
 		sleep 10
 # Check output.log to see if message was recieved by server.  The tail variable may need to be adjusted so that the
 # log does not generate more lines that it looks back into the log
-		if tac $OUTPUTFILE | grep -m 1 "$CURRENTTIME" >/dev/null
+		if tac /dev/shm/output$PORT.log | grep -m 1 "$CURRENTTIME" >/dev/null
 		then
 			echo "Server is responding"
 			echo "Server time variable is $CURRENTTIME"
@@ -697,7 +691,7 @@ create_rankscommands
 # A tiny sleep to prevent cpu burning overhead
 		sleep 0.1
 # Uses Cat to calculate the number of lines in the log file
-		NUMOFLINES=$(wc -l $OUTPUTFILE | cut -d" " -f1)
+		NUMOFLINES=$(wc -l /dev/shm/output$PORT.log | cut -d" " -f1)
 # In case Linestart does not have a value give it an interger value of 1.  The prevents a startup error on the script.
 		if [ -z "$LINESTART" ]
 		then
@@ -714,7 +708,7 @@ create_rankscommands
 # This sets the field seperator to use \n next line instead of next space.  This makes it so the array is a whole sentence not a word
 			IFS=$'\n'
 # Linestring is stored as an array of every line in the log
-			LINESTRING=( $(awk "NR==$LINESTART, NR==$NUMOFLINES" $OUTPUTFILE) )
+			LINESTRING=( $(awk "NR==$LINESTART, NR==$NUMOFLINES" /dev/shm/output$PORT.log) )
 			IFS=$OLD_IFS
 			LINESTART=$NUMOFLINES
 #			echo "$LINESTART is adjusted linestart"
@@ -936,12 +930,12 @@ log_playerinfo() {
 create_playerfile $1
 as_user "screen -p 0 -S $SCREENID -X stuff $'/player_info $1\n'"
 sleep 2
-if tac $OUTPUTFILE | grep -m 1 -A 10 "Name: $1" >/dev/null
+if tac /dev/shm/output$PORT.log | grep -m 1 -A 10 "Name: $1" >/dev/null
 then
 	OLD_IFS=$IFS
 	IFS=$'\n'
 #echo "Player info $1 found"
-	PLAYERINFO=( $(tac $OUTPUTFILE | grep -m 1 -A 10 "Name: $1") )
+	PLAYERINFO=( $(tac /dev/shm/output$PORT.log | grep -m 1 -A 10 "Name: $1") )
 	IFS=$OLD_IFS
 	PNAME=$(echo ${PLAYERINFO[0]} | cut -d: -f2 | cut -d" " -f2)
 #echo "Player name is $PNAME"
