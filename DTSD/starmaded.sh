@@ -1,7 +1,7 @@
 #!/bin/bash
 # Doomsider's and Titanmasher's Daemon Script for Starmade.  init.d script 7/10/13 based off of http://paste.boredomsoft.org/main.php/view/62107887
 # All credits to Andrew for his initial work
-# Version .17.1 28/8/2014
+# Version .17.1.1 30/11/2014
 # Jstack for a dump has been added into the ebrake command to be used with the detect command to see if server is responsive.
 # These dumps will be in starterpath/logs/threaddump.log and can be submitted to Schema to troubleshoot server crashes
 # !!!You must update starmade.cfg for the Daemon to work on your setup!!!
@@ -4953,7 +4953,7 @@ debug)
 	parselog ${@:2}
 	;;
 *)
-echo "Doomsider's and Titanmasher's Starmade Daemon (DSD) V.17.1"
+echo "Doomsider's and Titanmasher's Starmade Daemon (DSD) V.17.1.1"
 echo "Usage: starmaded.sh {help|updatefiles|start|stop|ebrake|install|reinstall|restore|status|destroy|restart|upgrade|upgradestar|smdo|smsay|cronstop|cronbackup|cronrestore|backup|livebackup|backupstar|setplayermax|detect|log|screenlog|check|precheck|ban|dump|box}"
 #******************************************************************************
 exit 1
