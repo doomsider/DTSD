@@ -1714,11 +1714,18 @@ then
 	XLLIMIT=$(($(echo $UNIVERSECENTER | cut -d"," -f1) - $UNIVERSERADIUS))
 	YLLIMIT=$(($(echo $UNIVERSECENTER | cut -d"," -f2) - $UNIVERSERADIUS))
 	ZLLIMIT=$(($(echo $UNIVERSECENTER | cut -d"," -f3) - $UNIVERSERADIUS))
+    XUEXCESS=$(($XULIMIT + 2))
+    YUEXCESS=$(($YULIMIT + 2))
+    ZUEXCESS=$(($ZULIMIT + 2))
+    XLEXCESS=$(($XLLIMIT - 2))
+    YLEXCESS=$(($YLLIMIT - 2))
+    ZLEXCESS=$(($ZLLIMIT - 2))
 	XCOORD=$(echo $1 | cut -d"," -f1)
 	YCOORD=$(echo $1 | cut -d"," -f2)
 	ZCOORD=$(echo $1 | cut -d"," -f3)
 	if [ "$XCOORD" -ge "$XULIMIT" ] || [ "$YCOORD" -ge "$YULIMIT" ] || [ "$ZCOORD" -ge "$ZULIMIT" ] || [ "$XCOORD" -lt "$XLLIMIT" ] || [ "$YCOORD" -lt "$YLLIMIT" ] || [ "$ZCOORD" -lt "$ZLLIMIT" ]
 	then
+		#X-Coord Checking
 		if [ "$XCOORD" -ge "$XULIMIT" ]
 		then
 			NEWX=$(($XCOORD - $XULIMIT + $XLLIMIT))
@@ -1728,6 +1735,7 @@ then
 		else
 			NEWX=$XCOORD
 		fi
+		#Y-Coord checking
 		if [ "$YCOORD" -ge "$YULIMIT" ]
 		then
 			NEWY=$(($YCOORD - $YULIMIT + $YLLIMIT))
@@ -1737,6 +1745,7 @@ then
 		else
 			NEWY=$YCOORD
 		fi
+		#Z-Coord Checking
 		if [ "$ZCOORD" -ge "$ZULIMIT" ]
 		then
 			NEWZ=$(($ZCOORD - $ZULIMIT + $ZLLIMIT))
@@ -1746,6 +1755,12 @@ then
 		else
 			NEWZ=$ZCOORD
 		fi
+		#Checks if they are too far outside of the boarder, and overrides the previous checks if they are
+		if [ "$XCOORD" -ge "$XUEXCESS" ] || [ "$XCOORD" -le "$XLEXCESS" ] || [ "$YCOORD" -ge "$YUEXCESS" ] || [ "$YCOORD" -le "$YLEXCESS" ] || [ "$ZCOORD" -ge "$ZUEXCESS" ] || [ "$ZCOORD" -le "$ZLEXCESS" ]
+		then
+			NEWX=$(echo $UNIVERSECENTER | cut -d"," -f1)
+			NEWY=$(echo $UNIVERSECENTER | cut -d"," -f2)
+			NEWZ=$(echo $UNIVERSECENTER | cut -d"," -f3)
 		sleep 4
 		as_user "screen -p 0 -S $SCREENID -X stuff $'/pm $2 You have warped to the opposite side of the universe! It appears you cant go further out...\n'"
 		as_user "screen -p 0 -S $SCREENID -X stuff $'/change_sector_for $2 $NEWX $NEWY $NEWZ\n'"
