@@ -1761,6 +1761,7 @@ then
 			NEWX=$(echo $UNIVERSECENTER | cut -d"," -f1)
 			NEWY=$(echo $UNIVERSECENTER | cut -d"," -f2)
 			NEWZ=$(echo $UNIVERSECENTER | cut -d"," -f3)
+		fi
 		sleep 4
 		as_user "screen -p 0 -S $SCREENID -X stuff $'/pm $2 You have warped to the opposite side of the universe! It appears you cant go further out...\n'"
 		as_user "screen -p 0 -S $SCREENID -X stuff $'/change_sector_for $2 $NEWX $NEWY $NEWZ\n'"
