@@ -543,7 +543,7 @@ if ps aux | grep $SERVICE | grep -v grep | grep -v tee | grep port:$PORT >/dev/n
 # Check for starmade running the passes second argument as a command on server.  Use quotations if you have spaces in command.
 then
 	DOSTRING=$(echo $@ | cut -d" " -f2- | tr -d '<>()!@#$%^&*/[]{},\\' | sed "s/'//g" | sed "s/\"//g")
-	as_user "screen -p 0 -S $SCREENID -X stuff $'/$2\n'"
+	as_user "screen -p 0 -S $SCREENID -X stuff $'/$DOSTRING\n'"
 else
 	echo "Starmade is not running!"
 fi
@@ -718,7 +718,7 @@ create_rankscommands
 # Search strings that the logging function is looking to trigger events
 		SEARCHLOGIN="[SERVER][LOGIN] login received. returning login info for RegisteredClient: "
 		SEARCHREMOVE="[SERVER][DISCONNECT] Client 'RegisteredClient:"
-		SEARCHCHAT="[CHAT]"
+		SEARCHCHAT="ChatMessage ["
 		SEARCHCHANGE="has players attached. Doing Sector Change for PlS"
 		SEARCHBUY="[BLUEPRINT][BUY]"
 		SEARCHBOARD="[CONTROLLER][ADD-UNIT]"
@@ -1021,13 +1021,8 @@ CHATGREP=$@
 if [[ ! $CHATGREP == *WARNING* ]] && [[ ! $CHATGREP == *object* ]]
 then
 #	echo $CHATGREP
-	COMMAND=$(echo $CHATGREP | cut -d" " -f4)
-	if [[ "$CHATGREP" =~ "[SERVER][CHAT][WISPER]" ]]
-	then
-		PLAYERCHATID=$(echo $CHATGREP | rev | cut -d"]" -f2 | rev | cut -d"[" -f2)
-	else
-		PLAYERCHATID=$(echo $CHATGREP | cut -d: -f1 | rev | cut -d" " -f1 | rev)
-	fi
+	COMMAND=$(echo $CHATGREP | cut -d= -f2 | cut -d, -f1)
+	PLAYERCHATID=$(echo $CHATGREP | cut -d= -f3 | cut -d, -f1)
 	if [[ "${COMMAND:0:1}" == "!" ]]
 	then
 #	echo $CHATGREP
