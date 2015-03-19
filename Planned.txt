@@ -11,6 +11,10 @@ Planned/ideas for features for starmaded:
  - Kit store for voting points
  - Voting points/faction points exchange
  
+ -Translation French and other
+ -SQL Management (stats,online,faction)
+ -added to a limit of ping  (ping_limit: 500)
+ 
 Advanced/looking into:
  - Wrapper functionality (packet interception) <will run by schema>
  - Inter-server mail system <will run by schema>
