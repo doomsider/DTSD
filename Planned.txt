@@ -1,23 +1,8 @@
-Planned/ideas for features for starmaded:
- - The ability for the !GIVESET command to read the block config
+Planned for features for starmaded:
  - Cleaned up code, using source to get variables from files
- - Add in the use of the box function for general commands
- - Faction points, gained for faction activity and used for various systems (jump and warp mabey?)
  - A custom spawning system, using plex storages as payment for the ships (as soon as blueprint and inventory commands are added)
  - Variable shutdown timer for use in the sm_stop command
  - New gamemodes (Hardcore and race for credits)
- - Fleet system (needs new command before it can be fully implimented)
- - Faction points for activity
  - Kit store for voting points
  - Voting points/faction points exchange
- 
- -Translation French and other
- -SQL Management (stats,online,faction)
- -added to a limit of ping  (ping_limit: 500)
- 
-Advanced/looking into:
- - Wrapper functionality (packet interception) <will run by schema>
- - Inter-server mail system <will run by schema>
- - Inter-server war system <will run by schema>
- - Ingame chat linked to IRC channel for the server
- - Use of the uplink data to inform users when they recieve a starmadedock mail message? <will run by resba and schema>
+ - Translation French and other
