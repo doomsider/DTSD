@@ -1,0 +1,9 @@
+Ideas for features for starmaded:
+ - The ability for the !GIVESET command to read the block config
+ - Add in the use of the box function for general commands
+ - Fleet system (needs new command before it can be fully implimented)
+ - SQL Management (stats,online,faction)
+ - added to a limit of ping  (ping_limit: 500)
+
+Advanced/looking into:
+ - Use of the uplink data to inform users when they recieve a starmadedock mail message? <will run by resba and schema>
