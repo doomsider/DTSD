@@ -1,5 +1,6 @@
 DTSD
 ====
+Special Note: DTSD is depcriated and no longer supported please see Shadow https://github.com/doomsider/shadow 
 
 StarMade Daemon
 
